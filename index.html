@@ -1,0 +1,2020 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenFlow · 批量生图生视频平台</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;900&display=swap');
+:root{
+  --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a26;--bg4:#22222f;
+  --border:#2a2a3f;--border2:#3a3a55;
+  --accent:#7c6cfa;--accent2:#a855f7;--accent3:#06d6a0;
+  --text:#e8e8f0;--text2:#9898b8;--text3:#5a5a7a;
+  --red:#ff4d6d;--yellow:#ffd60a;
+  --shadow:0 4px 24px rgba(0,0,0,0.4)
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+/* HEADER */
+.header{position:sticky;top:0;z-index:100;background:rgba(10,10,15,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Space Mono',monospace;font-weight:700;font-size:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tab-pills{display:flex;background:var(--bg3);border-radius:8px;padding:3px;border:1px solid var(--border)}
+.tab-pill{padding:5px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);transition:all .2s;user-select:none}
+.tab-pill.active{background:var(--accent);color:#fff;box-shadow:0 0 14px rgba(124,108,250,.35)}
+/* LAYOUT */
+.main{display:flex;height:calc(100vh - 54px)}
+.sidebar{width:310px;min-width:310px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px;gap:12px;overflow-y:auto}
+.sidebar-title{font-size:10px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--text3);margin-top:2px}
+/* CONFIG */
+.config-panel{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:9px}
+.config-row{display:flex;flex-direction:column;gap:4px}
+.config-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px}
+.config-input{background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:'Space Mono',monospace;font-size:11px;outline:none;transition:border-color .2s;width:100%}
+.config-input:focus{border-color:var(--accent)}
+.config-select{background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;outline:none;width:100%;cursor:pointer}
+.config-hint{font-size:10px;color:var(--text3);line-height:1.5}
+/* JSON EDITOR */
+.json-editor{min-height:210px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-family:'Space Mono',monospace;font-size:11px;line-height:1.7;resize:vertical;outline:none;transition:border-color .2s;width:100%}
+.json-editor:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,108,250,.08)}
+.json-editor::placeholder{color:var(--text3)}
+.json-error{font-size:11px;color:var(--red);display:none;padding:6px 10px;background:rgba(255,77,109,.1);border-radius:6px;border:1px solid rgba(255,77,109,.2);font-family:'Space Mono',monospace}
+.json-error.show{display:block}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 13px;border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;user-select:none;white-space:nowrap}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;width:100%;padding:11px;font-size:14px;box-shadow:0 4px 16px rgba(124,108,250,.22)}
+.btn-primary:hover:not(:disabled){box-shadow:0 6px 24px rgba(124,108,250,.42);transform:translateY(-1px)}
+.btn-secondary{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.btn-secondary:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);padding:5px 10px;font-size:12px}
+.btn-ghost:hover:not(:disabled){background:var(--bg3);color:var(--text)}
+.btn-danger{background:rgba(255,77,109,.1);color:var(--red);border:1px solid rgba(255,77,109,.22);padding:5px 10px;font-size:12px}
+.btn-danger:hover:not(:disabled){background:rgba(255,77,109,.2)}
+.btn-green{background:rgba(6,214,160,.1);color:var(--accent3);border:1px solid rgba(6,214,160,.22);padding:5px 10px;font-size:12px}
+.btn-green:hover:not(:disabled){background:rgba(6,214,160,.2)}
+.sep{height:1px;background:var(--border);margin:2px 0}
+.conc-wrap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.conc-wrap input[type=range]{accent-color:var(--accent);flex:1}
+/* CONTENT */
+.content{flex:1;overflow-y:auto;padding:20px}
+/* STATS BAR */
+.stats-bar{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding:9px 14px;background:var(--bg2);border-radius:10px;border:1px solid var(--border)}
+.stat-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.stat-item strong{color:var(--text);font-weight:700}
+.stat-dot{width:7px;height:7px;border-radius:50%}
+.stat-dot.done{background:var(--accent3)}.stat-dot.pend{background:var(--yellow)}.stat-dot.fail{background:var(--red)}
+.stats-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+/* SELECTION BAR */
+.sel-bar{display:none;align-items:center;gap:10px;padding:9px 14px;background:rgba(124,108,250,.07);border:1px solid rgba(124,108,250,.22);border-radius:10px;margin-bottom:14px;font-size:13px}
+.sel-bar.show{display:flex}
+.sel-bar strong{color:var(--accent)}
+/* IMAGE GRID */
+.image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.img-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:all .22s;position:relative}
+.img-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:var(--shadow)}
+.img-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,108,250,.2)}
+.img-check{position:absolute;top:10px;left:10px;z-index:10;width:22px;height:22px;border-radius:6px;border:2px solid rgba(255,255,255,.4);background:rgba(0,0,0,.4);backdrop-filter:blur(4px);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:11px;color:transparent}
+.img-card.selected .img-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.img-preview{width:100%;aspect-ratio:1;background:var(--bg3);position:relative;overflow:hidden;cursor:pointer}
+.img-preview img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}
+.img-preview:hover img{transform:scale(1.04)}
+.img-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text3);font-size:11px}
+.status-overlay{position:absolute;inset:0;background:rgba(10,10,15,.78);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;backdrop-filter:blur(2px)}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status-text{font-size:11px;color:var(--text2);text-align:center}
+.prog-wrap{width:90px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .4s}
+.status-badge{position:absolute;top:10px;right:10px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;z-index:5}
+.status-badge.generating{background:rgba(255,214,10,.15);color:var(--yellow)}
+.status-badge.done{background:rgba(6,214,160,.15);color:var(--accent3)}
+.status-badge.failed{background:rgba(255,77,109,.15);color:var(--red)}
+.status-badge.idle{background:rgba(255,255,255,.04);color:var(--text3)}
+.img-card-body{padding:11px;display:flex;flex-direction:column;gap:8px}
+.img-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+/* SIZE PICKER */
+.size-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:2px}
+.size-opt{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;background:var(--bg4);border:1.5px solid var(--border);border-radius:8px;cursor:pointer;transition:all .18s;user-select:none}
+.size-opt:hover{border-color:var(--accent);background:rgba(124,108,250,.08)}
+.size-opt.selected{border-color:var(--accent);background:rgba(124,108,250,.15);box-shadow:0 0 0 1px var(--accent)}
+.size-opt .size-icon{color:var(--text2);display:flex;align-items:center;justify-content:center;height:26px}
+.size-opt .size-label{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap}
+.size-opt .size-dim{font-size:9px;color:var(--text3);font-family:'Space Mono',monospace;white-space:nowrap}
+.size-opt.selected .size-label{color:var(--accent)}
+.size-opt.selected .size-icon{color:var(--accent)}
+/* META TAGS */
+.meta-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.meta-tag{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
+.tag-group{background:rgba(124,108,250,.15);color:var(--accent);border:1px solid rgba(124,108,250,.3)}
+.tag-kp{background:rgba(6,214,160,.12);color:var(--accent3);border:1px solid rgba(6,214,160,.25)}
+.tag-type{background:rgba(255,214,10,.1);color:var(--yellow);border:1px solid rgba(255,214,10,.25)}
+.tag-vid{background:rgba(168,85,247,.12);color:var(--accent2);border:1px solid rgba(168,85,247,.25)}
+.img-desc{font-size:10px;color:var(--text3);margin-top:4px;line-height:1.5;font-style:italic}
+.img-id{font-family:'Space Mono',monospace;font-size:10px;color:var(--text3)}
+.img-size-badge{font-size:10px;padding:1px 7px;border-radius:10px;background:var(--bg4);border:1px solid var(--border);color:var(--text3);font-family:'Space Mono',monospace}
+.prompt-textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;line-height:1.6;resize:none;outline:none;min-height:64px;transition:border-color .2s}
+.prompt-textarea:focus{border-color:var(--accent)}
+/* KNOWLEDGE POINT BOX */
+.kp-box{background:rgba(6,214,160,.07);border:1px solid rgba(6,214,160,.2);border-radius:8px;padding:7px 10px;margin-top:2px}
+.kp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.kp-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--accent3)}
+.kp-edit-btn{font-size:10px;padding:1px 7px;border-radius:5px;background:rgba(6,214,160,.12);border:1px solid rgba(6,214,160,.3);color:var(--accent3);cursor:pointer;transition:all .15s;font-family:'Outfit',sans-serif}
+.kp-edit-btn:hover{background:rgba(6,214,160,.25)}
+.kp-text{font-size:12px;color:var(--text);line-height:1.5;font-weight:500}
+.kp-input{width:100%;background:var(--bg4);border:1px solid var(--accent3);border-radius:6px;padding:5px 8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;line-height:1.5;resize:none;outline:none;min-height:48px;margin-top:3px}
+.kp-save-row{display:flex;gap:5px;margin-top:5px}
+.kp-save-btn{padding:3px 10px;background:rgba(6,214,160,.15);border:1px solid rgba(6,214,160,.35);color:var(--accent3);border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;font-family:'Outfit',sans-serif;transition:all .15s}
+.kp-save-btn:hover{background:rgba(6,214,160,.28)}
+.kp-cancel-btn{padding:3px 10px;background:var(--bg4);border:1px solid var(--border);color:var(--text3);border-radius:5px;cursor:pointer;font-size:11px;font-family:'Outfit',sans-serif;transition:all .15s}
+.kp-cancel-btn:hover{background:var(--bg3)}
+/* GEN HISTORY (per-image) */
+.gen-history-section{border-top:1px solid var(--border);padding-top:8px;margin-top:6px;display:flex;flex-direction:column;gap:5px}
+.gen-history-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);display:flex;align-items:center;justify-content:space-between}
+.gen-history-toggle{font-size:10px;padding:1px 7px;border-radius:5px;background:var(--bg4);border:1px solid var(--border);color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;transition:all .15s;font-weight:400;text-transform:none;letter-spacing:0}
+.gen-history-toggle:hover{border-color:var(--accent);color:var(--accent)}
+.gen-history-list{display:flex;flex-direction:column;gap:5px}
+.gen-history-item{background:var(--bg3);border:1px solid var(--border);border-radius:7px;overflow:hidden;display:flex;gap:8px;padding:7px 8px;align-items:flex-start;cursor:pointer;transition:border-color .15s}
+.gen-history-item:hover{border-color:var(--border2)}
+.gen-history-thumb{width:48px;height:48px;border-radius:5px;object-fit:cover;flex-shrink:0;background:var(--bg4)}
+.gen-history-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.gen-history-time{font-size:9px;color:var(--text3);font-family:'Space Mono',monospace}
+.gen-history-prompt{font-size:10px;color:var(--text2);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.gen-history-restore{font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(124,108,250,.1);border:1px solid rgba(124,108,250,.25);color:var(--accent);cursor:pointer;font-family:'Outfit',sans-serif;flex-shrink:0;align-self:center;transition:all .15s}
+.gen-history-restore:hover{background:rgba(124,108,250,.2)}
+/* COMMENT SECTION */
+.comment-section{border-top:1px solid var(--border);padding-top:8px;margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.comment-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)}
+.comment-history{display:flex;flex-direction:column;gap:5px;max-height:130px;overflow-y:auto}
+.comment-item{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:7px 9px}
+.comment-item-meta{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.comment-item-time{font-size:9px;color:var(--text3);font-family:'Space Mono',monospace}
+.comment-item-text{font-size:11px;color:var(--text2);line-height:1.5;white-space:pre-wrap;word-break:break-all}
+.comment-input-wrap{display:flex;gap:5px;align-items:flex-end}
+.comment-textarea{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;resize:none;outline:none;min-height:44px;line-height:1.5;transition:border-color .2s}
+.comment-textarea:focus{border-color:var(--accent2)}
+.comment-submit{padding:6px 10px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);color:var(--accent2);border-radius:7px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;transition:all .2s;flex-shrink:0;font-family:'Outfit',sans-serif}
+.comment-submit:hover{background:rgba(168,85,247,.25)}
+.comment-empty{font-size:10px;color:var(--text3);font-style:italic;padding:2px 0}
+.card-actions{display:flex;gap:5px;flex-wrap:wrap}
+/* EMPTY STATE */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:80px 20px;text-align:center;color:var(--text3)}
+.empty-state h3{font-size:15px;font-weight:600;color:var(--text2)}
+.empty-state p{font-size:12px;max-width:280px;line-height:1.7}
+/* VIDEO SECTION */
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.section-head h2{font-size:15px;font-weight:700}
+.section-badge{padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.video-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:all .22s;position:relative}
+.video-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:var(--shadow)}
+.video-preview{width:100%;aspect-ratio:16/9;background:var(--bg3);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.video-preview img{width:100%;height:100%;object-fit:cover;filter:brightness(.55)}
+.video-preview video{width:100%;height:100%;object-fit:cover}
+.play-btn{position:absolute;width:42px;height:42px;background:rgba(124,108,250,.82);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;box-shadow:0 4px 16px rgba(124,108,250,.35);font-size:15px}
+.play-btn:hover{transform:scale(1.1);background:var(--accent)}
+.vid-card-body{padding:11px;display:flex;flex-direction:column;gap:8px}
+.src-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3)}
+.src-thumb{width:34px;height:34px;border-radius:5px;object-fit:cover;border:1px solid var(--border)}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;max-width:820px;width:100%;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.modal-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-weight:600;font-size:14px}
+.modal-close{width:26px;height:26px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s}
+.modal-close:hover{background:var(--bg4);color:var(--text)}
+.modal-body{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+.modal-body img{width:100%;border-radius:8px;max-height:55vh;object-fit:contain}
+/* TOAST */
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 15px;font-size:13px;color:var(--text);box-shadow:var(--shadow);animation:toastIn .3s ease;pointer-events:auto;max-width:280px}
+.toast.success{border-left:3px solid var(--accent3)}.toast.error{border-left:3px solid var(--red)}.toast.info{border-left:3px solid var(--accent)}
+@keyframes toastIn{from{transform:translateX(12px);opacity:0}to{transform:translateX(0);opacity:1}}
+/* TASK PENDING BADGE */
+.task-pending-tag{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:20px;font-size:10px;background:rgba(255,214,10,.1);border:1px solid rgba(255,214,10,.25);color:var(--yellow)}
+/* HISTORY */
+.history-tab{display:flex;align-items:center;gap:6px}
+.history-badge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;min-width:16px;text-align:center}
+.history-panel{position:fixed;top:54px;right:0;bottom:0;width:320px;background:var(--bg2);border-left:1px solid var(--border);z-index:200;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.history-panel.open{transform:translateX(0)}
+.history-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.history-header h3{font-size:13px;font-weight:700}
+.history-list{flex:1;overflow-y:auto;padding:10px}
+.history-item{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.history-item:hover{border-color:var(--accent)}
+.history-item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.history-item-title{font-size:12px;font-weight:600;color:var(--text)}
+.history-item-time{font-size:10px;color:var(--text3)}
+.history-item-stats{display:flex;gap:6px;flex-wrap:wrap}
+.history-stat{font-size:10px;padding:2px 7px;border-radius:8px;background:var(--bg4);color:var(--text3)}
+.history-stat.ok{color:var(--accent3);background:rgba(6,214,160,.1)}
+.history-item-thumbs{display:flex;gap:4px;margin-top:8px;overflow:hidden}
+.history-thumb{width:46px;height:46px;border-radius:5px;object-fit:cover;background:var(--bg4);flex-shrink:0}
+.history-thumb-more{width:46px;height:46px;border-radius:5px;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);flex-shrink:0}
+.history-empty{text-align:center;color:var(--text3);font-size:13px;padding:40px 0}
+/* HISTORY DETAIL MODAL */
+.hdetail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.hdetail-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.hdetail-card img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:var(--bg4)}
+.hdetail-card-body{padding:8px}
+.hdetail-id{font-size:10px;font-weight:700;color:var(--text2);font-family:'Space Mono',monospace}
+.hdetail-prompt{font-size:10px;color:var(--text3);margin-top:2px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hdetail-failed{opacity:.5;text-align:center;padding:20px 0;font-size:11px;color:var(--red)}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">⚡ GenFlow</div>
+  <div class="tab-pills">
+    <div class="tab-pill active" id="tab-images" onclick="switchTab('images')">🖼 图片生成</div>
+    <div class="tab-pill" id="tab-videos" onclick="switchTab('videos')">🎬 视频生成</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="btn btn-secondary" id="save-record-btn" onclick="saveCurrentToRecord()"
+      style="padding:5px 13px;font-size:12px;display:none;border-color:var(--accent3);color:var(--accent3)">
+      💾 保存到记录
+    </button>
+    <button class="btn btn-secondary" onclick="toggleHistory()" style="padding:5px 13px;font-size:12px">
+      <span class="history-tab">📋 历史记录 <span class="history-badge" id="history-badge">0</span></span>
+    </button>
+  </div>
+</header>
+
+<!-- 历史记录面板 -->
+<div class="history-panel" id="history-panel">
+  <div class="history-header">
+    <h3>📋 生成历史</h3>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:10px;color:var(--text3)">自动保存 48h</span>
+      <button class="modal-close" onclick="toggleHistory()">✕</button>
+    </div>
+  </div>
+  <div class="history-list" id="history-list">
+    <div class="history-empty">暂无生成记录</div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- ======= SIDEBAR ======= -->
+  <aside class="sidebar">
+
+    <div class="sidebar-title">API 配置</div>
+    <div class="config-panel">
+      <!-- Image API -->
+      <div class="config-row">
+        <label class="config-label">生图模型</label>
+        <select class="config-select" id="img-model">
+          <option value="wan2.6-t2i" selected>☁ 阿里云 Wan2.6 T2I（当前）</option>
+          <option value="wanx2.1-t2i-turbo">☁ 阿里云 Wanx2.1 Turbo</option>
+          <option value="wanx2.1-t2i-plus">☁ 阿里云 Wanx2.1 Plus</option>
+          <option value="wan-2.1-t2i-turbo">🌋 火山方舟 Wan2.1 Turbo</option>
+          <option value="wan-2.1-t2i-pro">🌋 火山方舟 Wan2.1 Pro</option>
+          <option value="mock">🧪 Mock 演示</option>
+        </select>
+      </div>
+      <!-- Video API -->
+      <div class="config-row">
+        <label class="config-label">生视频模型</label>
+        <select class="config-select" id="vid-model">
+          <option value="seedance-1-5-pro-251215" selected>🌋 Seedance 1.5 Pro（推荐）</option>
+          <option value="seedance-1-0-pro-i2v-250528">🌋 Seedance 1.0 Pro</option>
+          <option value="seedance-1-0-lite-i2v-250528">🌋 Seedance 1.0 Lite</option>
+          <option value="mock">🧪 Mock 演示</option>
+        </select>
+      </div>
+      <!-- API Keys 已移至服务端，前端不需要填写 -->
+      <div class="config-hint" style="padding:6px 8px;background:rgba(6,214,160,.07);border:1px solid rgba(6,214,160,.2);border-radius:6px;color:var(--accent3)">
+        🔒 API Key 已由服务端统一管理，此页面无需填写
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="sidebar-title">任务 JSON 输入</div>
+    <textarea class="json-editor" id="json-input" rows="12" placeholder='支持两种格式：
+
+① 扁平数组（旧格式）：
+[{"id":"img_001","prompt":"...","width":1024,"height":1024}]
+
+② 嵌套结构（新格式）：
+{
+  "character_profile": {...},
+  "groups": [{
+    "group_name": "Group1",
+    "items": [{
+      "knowledge_point": "sea",
+      "assets": [{
+        "id": "g1_sea_intro",
+        "image_prompt": "...",
+        "video_prompts": [
+          {"type": "loop_action", "prompt": "..."}
+        ]
+      }]
+    }]
+  }]
+}'></textarea>
+    <div class="json-error" id="json-error">⚠ JSON 格式有误，请检查语法</div>
+
+    <div class="config-row" style="margin-top:4px">
+      <label class="config-label">图片尺寸</label>
+      <div class="size-picker" id="size-picker">
+        <div class="size-opt selected" data-size="json" onclick="pickSize(this)">
+          <span class="size-icon">📄</span>
+          <span class="size-label">基于 JSON</span>
+          <span class="size-dim">自动读取</span>
+        </div>
+        <div class="size-opt" data-size="1:1" onclick="pickSize(this)">
+          <span class="size-icon">
+            <svg width="22" height="22" viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          </span>
+          <span class="size-label">1 : 1</span>
+          <span class="size-dim">1024×1024</span>
+        </div>
+        <div class="size-opt" data-size="4:3" onclick="pickSize(this)">
+          <span class="size-icon">
+            <svg width="26" height="20" viewBox="0 0 26 20"><rect x="1" y="1" width="24" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          </span>
+          <span class="size-label">4 : 3</span>
+          <span class="size-dim">1024×768</span>
+        </div>
+        <div class="size-opt" data-size="3:4" onclick="pickSize(this)">
+          <span class="size-icon">
+            <svg width="20" height="26" viewBox="0 0 20 26"><rect x="1" y="1" width="18" height="24" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          </span>
+          <span class="size-label">3 : 4</span>
+          <span class="size-dim">768×1024</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="conc-wrap">
+      <span>并发数</span>
+      <input type="range" id="concurrency" min="1" max="3" value="1" oninput="document.getElementById('cv').textContent=this.value">
+      <strong id="cv">2</strong>
+    </div>
+
+    <button class="btn btn-primary" onclick="startGeneration()">▶ 开始批量生图</button>
+    <button class="btn btn-secondary" onclick="loadExample()">载入示例 JSON</button>
+  </aside>
+
+  <!-- ======= MAIN CONTENT ======= -->
+  <main class="content">
+
+    <!-- IMAGE SECTION -->
+    <div id="img-section">
+      <div class="stats-bar" id="stats-bar" style="display:none">
+        <div class="stat-item"><div class="stat-dot done"></div>完成 <strong id="s-done">0</strong></div>
+        <div class="stat-item"><div class="stat-dot pend"></div>生成中 <strong id="s-pend">0</strong></div>
+        <div class="stat-item"><div class="stat-dot fail"></div>失败 <strong id="s-fail">0</strong></div>
+        <div class="stats-actions">
+          <button class="btn btn-ghost" onclick="selectAll()">全选</button>
+          <button class="btn btn-ghost" onclick="deselectAll()">取消选择</button>
+          <button class="btn btn-ghost" onclick="downloadAll()">⬇ 全部下载</button>
+        </div>
+      </div>
+
+      <div class="sel-bar" id="sel-bar">
+        已选 <strong id="sel-count">0</strong> 张
+        <button class="btn btn-ghost" onclick="deselectAll()">取消</button>
+        <button class="btn btn-green" onclick="goVideoGen()">🎬 生成视频</button>
+        <button class="btn btn-ghost" onclick="downloadSelected()">⬇ 下载选中</button>
+      </div>
+
+      <div class="empty-state" id="empty-img">
+        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        <h3>还没有图片</h3>
+        <p>在左侧输入 JSON 格式任务，点击「开始批量生图」</p>
+      </div>
+
+      <div class="image-grid" id="img-grid"></div>
+    </div>
+
+    <!-- VIDEO SECTION -->
+    <div id="vid-section" style="display:none">
+      <div class="section-head">
+        <h2>🎬 视频生成</h2>
+        <div class="section-badge" id="vid-badge">0 个任务</div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="startVideoGen()">▶ 开始全部生成</button>
+          <button class="btn btn-ghost" onclick="downloadAllVids()">⬇ 全部下载</button>
+          <button class="btn btn-secondary" onclick="switchTab('images')">← 返回图片</button>
+        </div>
+      </div>
+      <div class="empty-state" id="empty-vid" style="display:none">
+        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <h3>请先选择图片</h3>
+        <p>在图片生成页面勾选图片，然后点击「生成视频」</p>
+      </div>
+      <div class="video-grid" id="vid-grid"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Preview modal -->
+<div class="modal-overlay" id="preview-modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">图片预览</div>
+      <div class="modal-close" onclick="closeModal()">✕</div>
+    </div>
+    <div class="modal-body">
+      <img id="modal-img" src="" alt="">
+      <div id="modal-prompt" style="font-size:12px;color:var(--text2);line-height:1.7"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 历史详情弹窗 -->
+<div class="modal-overlay" id="hdetail-modal" onclick="if(event.target===this)closeHDetail()">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-header">
+      <div class="modal-title" id="hdetail-title">历史记录详情</div>
+      <div class="modal-close" onclick="closeHDetail()">✕</div>
+    </div>
+    <div class="modal-body" id="hdetail-body"></div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ── 代理健康检查 ──
+async function checkProxy() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    await fetch(`${getProxyBase()}/`, { method: 'GET', signal: controller.signal });
+    clearTimeout(timer);
+    return true;
+  } catch(e) {
+    // AbortError = 超时 = 代理没跑；其他网络错误同理
+    return e.name === 'AbortError' ? false : true; // 404 之类连上了就算 OK
+  }
+}
+
+async function ensureProxy() {
+  const ok = await checkProxy();
+  if (!ok) {
+    // 显示醒目横幅
+    const banner = document.createElement('div');
+    banner.id = 'proxy-banner';
+    banner.style.cssText = `
+      position:fixed;top:0;left:0;right:0;z-index:9999;
+      background:#ff4d6d;color:#fff;font-size:13px;font-weight:600;
+      padding:10px 20px;display:flex;align-items:center;gap:12px;
+      font-family:'Outfit',sans-serif;
+    `;
+    const proxyAddr = getProxyBase();
+    const isLocal = proxyAddr.includes('localhost');
+    banner.innerHTML = `
+      <span>⚠ 代理服务未连接（${proxyAddr}）— 生图会失败</span>
+      ${isLocal ? `<span style="opacity:.7;font-weight:400">本地启动：</span>
+      <code style="background:rgba(0,0,0,.25);padding:2px 8px;border-radius:4px;font-family:monospace">
+        node ~/.openclaw/workspace/projects/gen-platform/proxy.mjs &
+      </code>` : `<span style="opacity:.7;font-weight:400">请确认代理服务已启动</span>`}
+      <span style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <input id="proxy-addr-input" value="${proxyAddr}" style="background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.4);color:#fff;padding:3px 8px;border-radius:5px;font-size:12px;width:220px;outline:none" placeholder="代理地址">
+        <button onclick="setProxyAddr()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">切换</button>
+        <button onclick="retryProxy()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:600">重新检测</button>
+      </span>
+    `;
+    document.body.prepend(banner);
+  } else {
+    const banner = document.getElementById('proxy-banner');
+    if (banner) banner.remove();
+    console.log('✅ 代理服务正常');
+  }
+}
+
+async function retryProxy() {
+  const ok = await checkProxy();
+  if (ok) {
+    const banner = document.getElementById('proxy-banner');
+    if (banner) banner.remove();
+    toast('✅ 代理服务已连接', 'success');
+  } else {
+    toast('代理仍未就绪，请确认已启动', 'error');
+  }
+}
+
+// 切换代理地址
+function setProxyAddr() {
+  const input = document.getElementById('proxy-addr-input');
+  if (!input) return;
+  const addr = input.value.trim().replace(/\/$/, '');
+  if (!addr) return;
+  localStorage.setItem('proxy_base', addr);
+  toast(`代理地址已切换为 ${addr}，页面将刷新…`, 'info');
+  setTimeout(() => location.reload(), 1000);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // API Key 已移至服务端，前端不再读写 Key
+  // 启动时检查代理
+  ensureProxy();
+  // 初始化历史面板（清理过期 + 显示数量）
+  renderHistoryPanel();
+});
+
+// ════════════════════════════════════════════════════════
+//  HISTORY  — localStorage, 24h TTL
+// ════════════════════════════════════════════════════════
+const HISTORY_KEY = 'genflow_history';
+const HISTORY_TTL = 48 * 60 * 60 * 1000; // 48 小时
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const all = JSON.parse(raw);
+    const now = Date.now();
+    // 过滤掉超过 24h 的记录
+    return all.filter(r => (now - r.createdAt) < HISTORY_TTL);
+  } catch(e) { return []; }
+}
+
+function saveHistory(records) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
+  } catch(e) {
+    // localStorage 满了，删最旧的一条
+    const records2 = records.slice(1);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(records2));
+  }
+}
+
+function addHistoryRecord(batchItems) {
+  const records = loadHistory();
+  const done = batchItems.filter(it => it.status === 'done');
+  const failed = batchItems.filter(it => it.status === 'failed');
+  // 默认名称：时间 + 成功数
+  const date = new Date();
+  const defaultName = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')} · ${done.length}张成功`;
+  const record = {
+    id: `batch_${Date.now()}`,
+    createdAt: Date.now(),
+    name: defaultName,
+    total: batchItems.length,
+    done: done.length,
+    failed: failed.length,
+    model: batchItems[0]?.model || '',
+    items: batchItems.map(it => ({
+      id: it.id,
+      prompt: it.prompt,
+      width: it.width,
+      height: it.height,
+      status: it.status,
+      url: it.url || null,
+      displayUrl: it.displayUrl || null,
+      group: it.group || '',
+      knowledge_point: it.knowledge_point || '',
+      image_desc: it.image_desc || '',
+      asset_type: it.asset_type || '',
+      video_prompts: it.video_prompts || [],
+      comments: it.comments || [],
+      genHistory: it.genHistory || [],
+      selected: false,
+    }))
+  };
+  records.unshift(record);
+  saveHistory(records.slice(0, 50));
+  renderHistoryPanel();
+}
+
+function renderHistoryPanel() {
+  const records = loadHistory();
+  const badge = document.getElementById('history-badge');
+  const list = document.getElementById('history-list');
+  if (badge) badge.textContent = records.length;
+  if (!list) return;
+  if (records.length === 0) {
+    list.innerHTML = '<div class="history-empty">暂无生成记录</div>';
+    return;
+  }
+
+  list.innerHTML = records.map(r => {
+    const expireIn = Math.max(0, Math.round((HISTORY_TTL - (Date.now() - r.createdAt)) / 3600000));
+    const doneItems = r.items.filter(it => it.status === 'done' && it.url);
+    const thumbs = doneItems.slice(0, 4).map(it =>
+      `<img class="history-thumb" src="${esc(proxyImgUrl(it.url))}" onerror="this.style.opacity='.3'">`
+    ).join('');
+    const more = doneItems.length > 4 ? `<div class="history-thumb-more">+${doneItems.length - 4}</div>` : '';
+
+    return `<div class="history-item" id="hitem-${esc(r.id)}">
+      <div class="history-item-header" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">
+        <span class="history-item-title" id="hname-${esc(r.id)}">${esc(r.name || r.id)}</span>
+        <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
+          <button class="btn btn-ghost" style="padding:2px 7px;font-size:11px" onclick="startRenameHistory('${esc(r.id)}')">✏</button>
+          <span class="history-item-time">${expireIn}h后过期</span>
+        </div>
+      </div>
+      <div class="history-item-stats" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">
+        <span class="history-stat ok">✓ ${r.done} 成功</span>
+        ${r.failed > 0 ? `<span class="history-stat" style="color:var(--red)">✗ ${r.failed} 失败</span>` : ''}
+        <span class="history-stat">${r.total} 张</span>
+        <span class="history-stat">${esc(r.model.replace('wan2.6-t2i','Wan2.6').replace('wanx2.1-t2i-turbo','Wanx2.1'))}</span>
+      </div>
+      <div class="history-item-thumbs" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">${thumbs}${more}</div>
+    </div>`;
+  }).join('');
+}
+
+// 点击历史记录 → 恢复到图片列表（可继续操作）
+function loadHistoryToGrid(recordId) {
+  const records = loadHistory();
+  const r = records.find(x => x.id === recordId);
+  if (!r) return;
+
+  // 恢复 items 状态
+  items = r.items.map(it => ({
+    ...it,
+    model: r.model,
+    style: '',
+    duration: 5,
+    progress: it.status === 'done' ? 100 : 0,
+    taskId: null,
+    selected: false,
+    comments: it.comments || [],
+    genHistory: it.genHistory || [],
+  }));
+
+  // 设置当前活跃记录
+  activeRecordId = recordId;
+  recordDirty = false;
+  updateSaveBtn();
+
+  // 关闭历史面板，切换到图片 tab
+  document.getElementById('history-panel').classList.remove('open');
+  switchTab('images');
+  document.getElementById('empty-img').style.display = 'none';
+  document.getElementById('stats-bar').style.display = '';
+  renderImageGrid();
+  updateStats();
+  updateSelBar();
+  toast(`📋 已加载「${r.name}」，共 ${r.total} 张 · 修改后可保存`, 'info');
+}
+
+// 重命名历史记录
+function startRenameHistory(recordId) {
+  const records = loadHistory();
+  const r = records.find(x => x.id === recordId);
+  if (!r) return;
+
+  const nameEl = document.getElementById(`hname-${recordId}`);
+  if (!nameEl) return;
+
+  const currentName = r.name || '';
+  const input = document.createElement('input');
+  input.value = currentName;
+  input.style.cssText = 'background:var(--bg4);border:1px solid var(--accent);border-radius:4px;color:var(--text);font-size:12px;padding:2px 6px;width:150px;outline:none;font-family:inherit';
+
+  const confirm = () => {
+    const newName = input.value.trim() || currentName;
+    r.name = newName;
+    saveHistory(records);
+    renderHistoryPanel();
+  };
+
+  input.onblur = confirm;
+  input.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = currentName; input.blur(); }
+  };
+
+  nameEl.innerHTML = '';
+  nameEl.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+// 把当前 items 同步回历史记录
+function syncItemsToRecord(auto = false) {
+  if (!activeRecordId) return;
+  const records = loadHistory();
+  const r = records.find(x => x.id === activeRecordId);
+  if (!r) return;
+
+  const done = items.filter(it => it.status === 'done');
+  const failed = items.filter(it => it.status === 'failed');
+
+  r.done = done.length;
+  r.failed = failed.length;
+  r.total = items.length;
+  r.items = items.map(it => ({
+    id: it.id,
+    prompt: it.prompt,
+    width: it.width,
+    height: it.height,
+    status: it.status,
+    url: it.url || null,
+    displayUrl: it.displayUrl || null,
+    group: it.group || '',
+    knowledge_point: it.knowledge_point || '',
+    image_desc: it.image_desc || '',
+    asset_type: it.asset_type || '',
+    video_prompts: it.video_prompts || [],
+    comments: it.comments || [],
+    genHistory: it.genHistory || [],
+    selected: false,
+  }));
+
+  saveHistory(records);
+  recordDirty = false;
+  updateSaveBtn();
+  renderHistoryPanel();
+  if (!auto) toast('✅ 已保存到历史记录', 'success');
+}
+
+// 手动点击「保存到记录」
+function saveCurrentToRecord() {
+  // 先从 textarea 同步最新 prompt
+  items.forEach(it => {
+    const ta = document.getElementById(`prompt-${it.id}`);
+    if (ta) it.prompt = ta.value;
+  });
+  syncItemsToRecord(false);
+}
+
+// 更新保存按钮显示状态
+function updateSaveBtn() {
+  const btn = document.getElementById('save-record-btn');
+  if (!btn) return;
+  if (activeRecordId && recordDirty) {
+    btn.style.display = '';
+    btn.style.animation = 'none';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+// 标记记录为已修改
+function markDirty() {
+  if (!activeRecordId) return;
+  recordDirty = true;
+  updateSaveBtn();
+}
+
+function toggleHistory() {
+  const panel = document.getElementById('history-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) renderHistoryPanel();
+}
+
+function closeHDetail() {
+  document.getElementById('hdetail-modal').classList.remove('show');
+}
+
+// ════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════
+let items = [];    // {id, prompt, width, height, status, url, selected, progress, taskId}
+let vidItems = []; // {id, srcId, srcUrl, srcPrompt, prompt, width, height, status, videoUrl, progress, taskId}
+let activeRecordId = null;  // 当前加载的历史记录 ID（null = 新批次）
+let recordDirty = false;    // 记录是否有未保存改动
+
+// ════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════
+function toast(msg, type='info') {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(),400); }, 3500);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function switchTab(tab) {
+  document.getElementById('tab-images').classList.toggle('active', tab==='images');
+  document.getElementById('tab-videos').classList.toggle('active', tab==='videos');
+  document.getElementById('img-section').style.display = tab==='images' ? '' : 'none';
+  document.getElementById('vid-section').style.display = tab==='videos' ? '' : 'none';
+}
+
+function loadExample() {
+  const ex = [
+    {"id":"img_001","prompt":"A cyberpunk city at night, neon lights reflecting on wet streets, ultra detailed 8K cinematic","width":1280,"height":720},
+    {"id":"img_002","prompt":"A serene Japanese zen garden with cherry blossoms, soft morning mist, photorealistic","width":1024,"height":1024},
+    {"id":"img_003","prompt":"An astronaut floating in deep space surrounded by colorful nebulae, dramatic lighting","width":720,"height":1280},
+    {"id":"img_004","prompt":"A cozy Nordic cabin in snowy winter forest, warm glowing windows, snowfall","width":1280,"height":960}
+  ];
+  document.getElementById('json-input').value = JSON.stringify(ex, null, 2);
+  document.getElementById('json-error').classList.remove('show');
+  toast('示例 JSON 已载入', 'info');
+}
+
+// ════════════════════════════════════════════════════════
+//  JSON 格式解析器 — 支持两种格式
+//  格式A（旧）：扁平数组 [{id, prompt, width, height}]
+//  格式B（新）：{character_profile, groups:[{group_name, items:[{knowledge_point, assets:[{id, image_prompt, video_prompts}]}]}]}
+// ════════════════════════════════════════════════════════
+function normalizeJSON(raw) {
+  // ── 工具：把单条 {id, prompt, combination?, ...} 转为 item ──
+  function toItem(p, i, groupLabel) {
+    const sz = parseSize(p);
+    return {
+      id: p.id || p.combination || `img_${String(i+1).padStart(3,'0')}`,
+      prompt: p.prompt || p.image_prompt || '',
+      width: sz.w,
+      height: sz.h,
+      group: groupLabel || p.group || '',
+      knowledge_point: p.knowledge_point || '',
+      image_desc: p.image_desc || p.combination || '',
+      asset_type: p.asset_type || '',
+      video_prompts: p.video_prompts || [],
+      _raw: p,
+    };
+  }
+
+  // 格式A：直接是数组
+  if (Array.isArray(raw)) {
+    return raw.map((p, i) => toItem(p, i, ''));
+  }
+
+  // ── 格式D：含 scenario_prompts / base_element_prompts / combination_prompts ──
+  // 按顺序：先场景 → 再单元素 → 再组合，统一打平
+  const hasScenes      = Array.isArray(raw.scenario_prompts);
+  const hasBase        = Array.isArray(raw.base_element_prompts);
+  const hasCombination = Array.isArray(raw.combination_prompts);
+  if (hasScenes || hasBase || hasCombination) {
+    const result = [];
+    if (hasScenes) {
+      raw.scenario_prompts.forEach((p, i) =>
+        result.push(toItem(p, i, '场景')));
+    }
+    if (hasBase) {
+      raw.base_element_prompts.forEach((p, i) =>
+        result.push(toItem(p, i, '单元素')));
+    }
+    if (hasCombination) {
+      raw.combination_prompts.forEach((p, i) =>
+        result.push(toItem(p, i, '组合')));
+    }
+    return result;
+  }
+
+  // 格式B：带 groups 的嵌套结构
+  if (raw.groups && Array.isArray(raw.groups)) {
+    const characterProfile = raw.character_profile || {};
+    const result = [];
+    raw.groups.forEach(group => {
+      const groupName = group.group_name || '';
+      (group.items || []).forEach(item => {
+        const kp = item.knowledge_point || '';
+        (item.assets || []).forEach(asset => {
+          const sz = parseSize(asset);
+          result.push({
+            id: asset.id || `asset_${result.length+1}`,
+            prompt: asset.image_prompt || '',
+            width: sz.w,
+            height: sz.h,
+            group: groupName,
+            knowledge_point: kp,
+            image_desc: asset.image_desc || '',
+            asset_type: asset.type || '',
+            video_prompts: asset.video_prompts || [],
+            character_profile: characterProfile,
+            _raw: asset,
+          });
+        });
+      });
+    });
+    return result;
+  }
+
+  // 格式C：单个对象（兜底）
+  return [toItem(raw, 0, '')];
+}
+
+function closeModal() {
+  document.getElementById('preview-modal').classList.remove('show');
+}
+
+function openPreview(id) {
+  const item = items.find(x => x.id === id);
+  if (!item || !item.url) return;
+  document.getElementById('modal-img').src = item.displayUrl || item.url;
+  document.getElementById('modal-title').textContent = `预览 · ${item.id}  (${item.width}×${item.height})`;
+  document.getElementById('modal-prompt').textContent = item.prompt;
+  document.getElementById('preview-modal').classList.add('show');
+}
+
+// ════════════════════════════════════════════════════════
+//  SIZE PICKER
+// ════════════════════════════════════════════════════════
+const SIZE_PRESETS = {
+  'json': null,            // 从 JSON 中读取
+  '1:1':  { w: 1024, h: 1024 },
+  '4:3':  { w: 1024, h: 768  },
+  '3:4':  { w: 768,  h: 1024 },
+};
+
+function pickSize(el) {
+  document.querySelectorAll('.size-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function getSelectedSize() {
+  const sel = document.querySelector('.size-opt.selected');
+  return sel ? sel.dataset.size : 'json';
+}
+
+// 根据全局尺寸选择覆盖 item 的 width/height
+function applySizeOverride(item) {
+  const sizeKey = getSelectedSize();
+  if (sizeKey === 'json') return item; // 不覆盖，使用 JSON 里的值
+  const preset = SIZE_PRESETS[sizeKey];
+  if (preset) { item.width = preset.w; item.height = preset.h; }
+  return item;
+}
+
+// ════════════════════════════════════════════════════════
+//  SIZE PARSING
+//  JSON 支持:
+//    width + height (数字)
+//    size: "1024x1024" / "1280x720" (字符串)
+//    aspect_ratio: "16:9" / "1:1" / "9:16"
+//    若都没有，默认 1024x1024
+// ════════════════════════════════════════════════════════
+const AR_MAP = { // aspect_ratio → 常用尺寸
+  '1:1':  { w: 1024, h: 1024 },
+  '16:9': { w: 1280, h: 720  },
+  '9:16': { w: 720,  h: 1280 },
+  '4:3':  { w: 1024, h: 768  },
+  '3:4':  { w: 768,  h: 1024 },  '21:9': { w: 1680, h: 720  },
+  '3:2':  { w: 1280, h: 854  },
+};
+
+function parseSize(raw) {
+  // width/height 直接数字
+  if (raw.width && raw.height) {
+    return { w: parseInt(raw.width), h: parseInt(raw.height) };
+  }
+  // size: "WxH"
+  if (raw.size && /^\d+x\d+$/i.test(raw.size)) {
+    const [w, h] = raw.size.toLowerCase().split('x').map(Number);
+    return { w, h };
+  }
+  // size: "W:H" (treat as ratio then pick standard)
+  if (raw.size && /^\d+:\d+$/.test(raw.size)) {
+    const [a, b] = raw.size.split(':').map(Number);
+    const key = `${a}:${b}`;
+    if (AR_MAP[key]) return { w: AR_MAP[key].w, h: AR_MAP[key].h };
+    // scale to ~1024 area
+    const area = 1024 * 1024;
+    const scale = Math.sqrt(area / (a * b));
+    return { w: Math.round(a * scale / 64) * 64, h: Math.round(b * scale / 64) * 64 };
+  }
+  // aspect_ratio: "16:9"
+  if (raw.aspect_ratio) {
+    const key = raw.aspect_ratio;
+    if (AR_MAP[key]) return { w: AR_MAP[key].w, h: AR_MAP[key].h };
+  }
+  // resolution field
+  if (raw.resolution && /^\d+x\d+$/i.test(raw.resolution)) {
+    const [w, h] = raw.resolution.toLowerCase().split('x').map(Number);
+    return { w, h };
+  }
+  // --ar W:H 从 prompt 文本中提取（如 --ar 3:4 / --ar 4:3）
+  const prompt = raw.prompt || raw.image_prompt || '';
+  const arMatch = prompt.match(/--ar\s+(\d+):(\d+)/i);
+  if (arMatch) {
+    const a = parseInt(arMatch[1]), b = parseInt(arMatch[2]);
+    const key = `${a}:${b}`;
+    if (AR_MAP[key]) return { w: AR_MAP[key].w, h: AR_MAP[key].h };
+    // 非标准比例：以 1024² 为基准等比缩放，64 对齐
+    const scale = Math.sqrt(1024 * 1024 / (a * b));
+    return { w: Math.round(a * scale / 64) * 64, h: Math.round(b * scale / 64) * 64 };
+  }
+  return { w: 1024, h: 1024 };
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHSCOPE API — 阿里云
+// ════════════════════════════════════════════════════════
+// 通过本地代理避免浏览器 CORS 限制
+// 代理服务: node proxy.mjs (端口 8767)
+// 支持自定义代理地址（公网部署时通过 URL 参数 ?proxy=https://xxx 指定）
+function getProxyBase() {
+  const urlParam = new URLSearchParams(window.location.search).get('proxy');
+  if (urlParam) return urlParam.replace(/\/$/, '');
+  const stored = localStorage.getItem('proxy_base');
+  if (stored) return stored.replace(/\/$/, '');
+  return 'http://localhost:8767';
+}
+const PROXY_BASE = getProxyBase();
+const DS_BASE  = `${PROXY_BASE}/proxy/dashscope/api/v1`;
+const ARK_BASE_PROXY = `${PROXY_BASE}/proxy/ark/api/v3`;
+console.log('[GenFlow] PROXY_BASE =', PROXY_BASE);
+console.log('[GenFlow] DS_BASE =', DS_BASE);
+console.log('[GenFlow] ARK_BASE =', ARK_BASE_PROXY);
+
+// wan2.6-t2i 使用新接口端点 + messages 格式
+// wanx2.1 等旧模型使用 text2image 端点 + prompt 格式
+// Key 由服务端代理注入，前端不传 Authorization
+async function submitDashScopeTask(item) {
+  const modelId = item.model;
+
+  const sizeStr = `${item.width}*${item.height}`;
+  const isWan26 = /^wan\d+\.\d+-t2i/.test(modelId); // wan2.6-t2i 系列
+
+  let endpoint, bodyObj;
+  if (isWan26) {
+    // wan2.6-t2i: 新端点 + messages 多模态格式
+    endpoint = `${DS_BASE}/services/aigc/image-generation/generation`;
+    bodyObj = {
+      model: modelId,
+      input: {
+        messages: [{
+          role: 'user',
+          content: [{ type: 'text', text: item.prompt }]
+        }]
+      },
+      parameters: { size: sizeStr }
+    };
+  } else {
+    // wanx2.1 等旧模型: 原始端点 + prompt 格式
+    endpoint = `${DS_BASE}/services/aigc/text2image/image-synthesis`;
+    bodyObj = {
+      model: modelId,
+      input: { prompt: item.prompt },
+      parameters: { size: sizeStr }
+    };
+  }
+
+  console.log('[GenFlow] POST', endpoint);
+  let resp;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-DashScope-Async': 'enable'
+        // Authorization 由服务端代理自动注入
+      },
+      body: JSON.stringify(bodyObj),
+    });
+    if (resp.status === 429) {
+      const waitSec = 3 + attempt * 3; // 3s → 6s → 9s
+      console.warn(`[GenFlow] 429 限流，${waitSec}s 后重试 (attempt ${attempt+1}/3)`);
+      await sleep(waitSec * 1000);
+      continue;
+    }
+    break;
+  }
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => `HTTP ${resp.status}`);
+    console.error('[GenFlow] submitDashScope failed:', resp.status, err);
+    if (resp.status === 429) throw new Error('DashScope 限流（429）：请减少并发数或稍后重试');
+    throw new Error(`DashScope error ${resp.status}: ${err}`);
+  }
+
+  const data = await resp.json();
+  console.log('[GenFlow] submitDashScope response:', JSON.stringify(data));
+  if (data.output && data.output.task_id) {
+    return { done: false, taskId: data.output.task_id, isWan26 };
+  }
+  throw new Error('DashScope 返回格式异常: ' + JSON.stringify(data));
+}
+
+async function pollDashScopeTask(taskId, isWan26) {
+  // Authorization 由服务端代理注入
+  const resp = await fetch(`${DS_BASE}/tasks/${taskId}`);
+  if (!resp.ok) throw new Error(`Poll error ${resp.status}`);
+  const data = await resp.json();
+  const output = data.output;
+  const status = output.task_status;
+
+  if (status === 'SUCCEEDED') {
+    let url;
+    if (isWan26) {
+      // wan2.6 响应格式: output.choices[0].message.content[0].image
+      url = output.choices?.[0]?.message?.content?.find(c => c.type === 'image')?.image;
+    } else {
+      // wanx2.1 响应格式: output.results[0].url
+      url = output.results?.[0]?.url;
+    }
+    if (!url) throw new Error('返回中未找到图片 URL');
+    return { done: true, url };
+  }
+  if (status === 'FAILED') {
+    throw new Error(output.message || output.code || '任务失败');
+  }
+  return { done: false };
+}
+
+// ════════════════════════════════════════════════════════
+//  WAN API — 火山方舟 (OpenAI-compatible)
+//  Image generation: async submit → poll
+// ════════════════════════════════════════════════════════
+const ARK_BASE = ARK_BASE_PROXY; // 走本地代理
+
+// Wan model id mapping
+function getWanModelId() {
+  const m = document.getElementById('img-model').value;
+  if (m === 'mock') return 'mock';
+  // 火山方舟的 endpoint_id 格式: ep-<xxx>，用户需自己填
+  // 官方 model name 格式: wan-2.1-t2i-turbo 等
+  return m;
+}
+
+// 火山方舟 Seedance 模型 ID 映射表
+const SEEDANCE_MODEL_MAP = {
+  'seedance-1-5-pro-251215':   'seedance-1-5-pro-251215',
+  'seedance-1-0-pro-i2v-250528':  'seedance-1-0-pro-i2v-250528',
+  'seedance-1-0-lite-i2v-250528': 'seedance-1-0-lite-i2v-250528',
+};
+
+function getVidModelId() {
+  const v = document.getElementById('vid-model').value;
+  return SEEDANCE_MODEL_MAP[v] || v;
+}
+
+// Key 已移至服务端代理，前端所有请求不再携带 Authorization
+// Submit image generation (async)
+// 路由规则: wanx* (含x) → 阿里云 DashScope
+//           wan-* (带连字符) → 火山方舟 Ark
+async function submitImageTask(item) {
+  const modelId = item.model;
+  if (modelId === 'mock') return null;
+
+  // 阿里云 DashScope: wanx2.x-t2i-*
+  if (/^wanx|^wan\d/.test(modelId)) {
+    return submitDashScopeTask(item);
+  }
+
+  const body = {
+    model: modelId,
+    prompt: item.prompt,
+    size: `${item.width}x${item.height}`,
+    response_format: 'url',
+    n: 1,
+  };
+  if (item.style) body.style = item.style;
+
+  const resp = await fetch(`${ARK_BASE}/images/generations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    // Authorization 由服务端代理注入
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => resp.status);
+    throw new Error(`Wan API error ${resp.status}: ${err}`);
+  }
+
+  const data = await resp.json();
+
+  // Synchronous response: data.data[0].url
+  if (data.data && data.data[0] && data.data[0].url) {
+    return { done: true, url: data.data[0].url };
+  }
+  // Async response: data.id (task_id to poll)
+  if (data.id) {
+    return { done: false, taskId: data.id };
+  }
+
+  throw new Error('Wan API 返回格式未知');
+}
+
+// Poll image task
+async function pollImageTask(item) {
+  const modelId = item.model;
+  // 阿里云 DashScope 路由
+  if (/^wanx|^wan\d/.test(modelId)) {
+    return pollDashScopeTask(item.taskId, item.isWan26);
+  }
+  // 火山方舟 Ark 路由（Authorization 由服务端代理注入）
+  const resp = await fetch(`${ARK_BASE}/images/generations/${item.taskId}`);
+  if (!resp.ok) throw new Error(`Poll error ${resp.status}`);
+  const data = await resp.json();
+  const status = data.status || (data.data ? 'succeeded' : 'pending');
+  if (status === 'succeeded' || (data.data && data.data[0])) {
+    return { done: true, url: data.data[0].url };
+  }
+  if (status === 'failed') throw new Error(data.error?.message || '生图任务失败');
+  return { done: false };
+}
+
+// Submit video task (Seedance I2V)
+// Authorization 由服务端代理注入
+async function submitVideoTask(vitem) {
+  const modelId = getVidModelId();
+  if (modelId === 'mock') return null;
+
+  // Seedance I2V 新格式: content 数组（multimodal）
+  const dur = vitem.duration || 5;
+  const promptText = (vitem.prompt || '') + ` --duration ${dur} --camerafixed false`;
+
+  const body = {
+    model: modelId,
+    content: [
+      { type: 'text', text: promptText },
+      { type: 'image_url', image_url: { url: vitem.srcUrl } }
+    ]
+  };
+
+  console.log('[GenFlow] submitVideoTask', modelId, vitem.srcUrl.slice(0, 60));
+
+  const resp = await fetch(`${ARK_BASE}/contents/generations/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    // Authorization 由服务端代理注入
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => String(resp.status));
+    console.error('[GenFlow] Seedance error:', resp.status, err);
+    throw new Error(`Seedance API error ${resp.status}: ${err}`);
+  }
+
+  const data = await resp.json();
+  console.log('[GenFlow] Seedance response:', JSON.stringify(data));
+  if (data.id) return { taskId: data.id };
+  if (data.task_id) return { taskId: data.task_id };
+
+  throw new Error('Seedance API 返回格式未知: ' + JSON.stringify(data));
+}
+
+// Poll video task（Authorization 由服务端代理注入）
+async function pollVideoTask(taskId) {
+  const resp = await fetch(`${ARK_BASE}/contents/generations/tasks/${taskId}`);
+  if (!resp.ok) throw new Error(`Poll error ${resp.status}`);
+  const data = await resp.json();
+
+  const status = data.status;
+  if (status === 'succeeded') {
+    // content 可能是对象 {video_url} 或数组 [{video_url}]
+    const content = data.content;
+    let videoUrl;
+    if (content) {
+      if (Array.isArray(content)) {
+        // 数组格式：找有 video_url 或 url 的项
+        const item = content.find(c => c.video_url || c.url);
+        videoUrl = item?.video_url || item?.url;
+      } else if (typeof content === 'object') {
+        // 对象格式：直接取 video_url 或 url
+        videoUrl = content.video_url || content.url;
+      }
+    }
+    if (videoUrl) return { done: true, videoUrl };
+    throw new Error('返回中未找到视频 URL，content=' + JSON.stringify(content));
+  }
+  if (status === 'failed') throw new Error(data.error?.message || '视频任务失败');
+  return { done: false };
+}
+
+// MOCK image
+const MOCK_IDS = [10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180,190,200];
+let mockIdx = 0;
+async function mockImage(item) {
+  await sleep(1500 + Math.random() * 2000);
+  const seed = MOCK_IDS[mockIdx % MOCK_IDS.length]; mockIdx++;
+  return `https://picsum.photos/seed/${item.id}${seed}/${Math.min(item.width,800)}/${Math.min(item.height,800)}`;
+}
+
+// ════════════════════════════════════════════════════════
+//  GENERATION ENGINE
+// ════════════════════════════════════════════════════════
+async function startGeneration() {
+  // 新批次：清除历史关联
+  activeRecordId = null;
+  recordDirty = false;
+  updateSaveBtn();
+
+  const raw = document.getElementById('json-input').value.trim();
+  if (!raw) { toast('请先输入 JSON 任务', 'error'); return; }
+
+  let parsed;
+  try {
+    const rawObj = JSON.parse(raw);
+    parsed = normalizeJSON(rawObj);
+    document.getElementById('json-error').classList.remove('show');
+    if (parsed.length === 0) { toast('JSON 中未找到可生图的任务', 'error'); return; }
+  } catch(e) {
+    document.getElementById('json-error').classList.add('show');
+    document.getElementById('json-error').textContent = '⚠ JSON 格式有误：' + e.message;
+    return;
+  }
+
+  toast(`解析完成，共 ${parsed.length} 张图片任务`, 'success');
+
+  items = parsed.map(p => {
+    const item = {
+      id: p.id,
+      prompt: p.prompt,
+      width: p.width,
+      height: p.height,
+      style: p.style || '',
+      duration: p.duration || 5,
+      model: getWanModelId(),
+      group: p.group || '',
+      knowledge_point: p.knowledge_point || '',
+      image_desc: p.image_desc || '',
+      asset_type: p.asset_type || '',
+      video_prompts: p.video_prompts || [],
+      comments: [],
+      genHistory: [],
+      extra: p._raw,
+      status: 'idle',
+      url: null,
+      selected: false,
+      progress: 0,
+      taskId: null,
+    };
+    return applySizeOverride(item); // 应用全局尺寸覆盖
+  });
+
+  document.getElementById('empty-img').style.display = 'none';
+  document.getElementById('stats-bar').style.display = '';
+  renderImageGrid();
+  updateStats();
+
+  const conc = parseInt(document.getElementById('concurrency').value);
+  const queue = [...items];
+  let active = 0;
+  let taskIndex = 0; // 用于给非第一个任务加提交间隔
+
+  const tick = () => {
+    while (queue.length > 0 && active < conc) {
+      const item = queue.shift();
+      const delay = taskIndex === 0 ? 0 : 2000; // 第一张立即，后续间隔 2s
+      taskIndex++;
+      active++;
+      sleep(delay).then(() => runItem(item)).finally(() => {
+        active--;
+        tick();
+        // 所有任务完成时保存历史
+        if (active === 0 && queue.length === 0) {
+          addHistoryRecord(items);
+        }
+      });
+    }
+  };
+  tick();
+}
+
+async function runItem(item) {
+  item.status = 'generating';
+  item.progress = 0;
+  renderCard(item.id);
+  updateStats();
+
+  const isMock = item.model === 'mock';
+  const progTimer = setInterval(() => {
+    if (item.progress < 88) { item.progress += 4 + Math.random() * 9; renderCard(item.id); }
+  }, 350);
+
+  try {
+    let url;
+    if (isMock) {
+      url = await mockImage(item);
+    } else {
+      const result = await submitImageTask(item);
+      if (result.done) {
+        url = result.url;
+      } else {
+        // Poll until done
+        item.taskId = result.taskId;
+        item.isWan26 = result.isWan26 || false;
+        // 轮询策略：前 3 次每 1s 快速检查，之后每 1.5s
+        for (let attempt = 0; attempt < 120; attempt++) {
+          const pollDelay = attempt < 3 ? 1000 : 1500;
+          await sleep(pollDelay);
+          const poll = await pollImageTask(item);
+          if (poll.done) { url = poll.url; break; }
+          item.progress = Math.min(item.progress + 2, 90);
+          renderCard(item.id);
+        }
+        if (!url) throw new Error('任务超时');
+      }
+    }
+    clearInterval(progTimer);
+    item.progress = 100;
+    item.status = 'done';
+    item.url = url;           // 原始 URL（用于下载、传给视频生成）
+    item.displayUrl = proxyImgUrl(url); // 代理 URL（用于页面显示）
+    // ── 记录单张图片生成历史 ──
+    if (!item.genHistory) item.genHistory = [];
+    const now = new Date();
+    const timeStr = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    item.genHistory.unshift({ url, displayUrl: proxyImgUrl(url), prompt: item.prompt, time: timeStr });
+    if (item.genHistory.length > 20) item.genHistory = item.genHistory.slice(0, 20); // 最多保留 20 条
+    toast(`✓ ${item.id} 生成完成`, 'success');
+  } catch(e) {
+    clearInterval(progTimer);
+    item.status = 'failed';
+    // 网络错误给出更友好的提示
+    let errMsg = e.message || String(e);
+    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('ERR_CONNECTION_REFUSED')) {
+      errMsg = '网络错误：代理服务未运行，请执行 node proxy.mjs &';
+      ensureProxy(); // 触发横幅
+    }
+    item.error = errMsg;
+    toast(`✗ ${item.id}: ${errMsg}`, 'error');
+  }
+
+  renderCard(item.id);
+  updateStats();
+
+  // 如果当前有关联的历史记录，自动同步（标记 dirty，由用户手动保存）
+  if (activeRecordId) {
+    markDirty();
+  }
+}
+
+async function regenItem(id) {
+  const item = items.find(x => x.id === id);
+  if (!item || item.status === 'generating') return;
+  item.url = null;
+  item.progress = 0;
+  item.error = null;
+  // Update prompt from textarea
+  const ta = document.getElementById(`prompt-${id}`);
+  if (ta) item.prompt = ta.value;
+  await runItem(item);
+}
+
+// ════════════════════════════════════════════════════════
+//  VIDEO GENERATION
+// ════════════════════════════════════════════════════════
+function goVideoGen() {
+  const selected = items.filter(x => x.selected && x.status === 'done');
+  if (!selected.length) { toast('请先勾选已完成的图片', 'error'); return; }
+
+  const existing = new Map(vidItems.map(v => [v.id, v]));
+
+  // 展开 video_prompts：每个 asset 的每条 video_prompt 生成一个视频任务
+  const newVidItems = [];
+  selected.forEach(item => {
+    const vPrompts = item.video_prompts || [];
+    if (vPrompts.length > 0) {
+      // 有预设视频 prompts，每条生成一个任务
+      vPrompts.forEach((vp, idx) => {
+        const vid_id = `vid_${item.id}_${vp.type || idx}`;
+        newVidItems.push(existing.get(vid_id) || {
+          id: vid_id,
+          srcId: item.id,
+          srcUrl: item.url,
+          srcPrompt: item.prompt,
+          prompt: vp.prompt || item.prompt,  // 使用预设视频 prompt
+          vidType: vp.type || '',             // loop_breathing / loop_action 等
+          width: item.width > item.height ? 1280 : 720,
+          height: item.width > item.height ? 720 : 1280,
+          duration: item.duration || 5,
+          status: 'idle',
+          videoUrl: null,
+          progress: 0,
+          taskId: null,
+        });
+      });
+    } else {
+      // 无预设 prompts，用图片 prompt 生成一个视频
+      const vid_id = `vid_${item.id}`;
+      newVidItems.push(existing.get(vid_id) || {
+        id: vid_id,
+        srcId: item.id,
+        srcUrl: item.url,
+        srcPrompt: item.prompt,
+        prompt: item.prompt,
+        vidType: '',
+        width: item.width > item.height ? 1280 : 720,
+        height: item.width > item.height ? 720 : 1280,
+        duration: item.duration || 5,
+        status: 'idle',
+        videoUrl: null,
+        progress: 0,
+        taskId: null,
+      });
+    }
+  });
+  vidItems = newVidItems;
+
+  document.getElementById('vid-badge').textContent = `${vidItems.length} 个任务`;
+  document.getElementById('empty-vid').style.display = vidItems.length ? 'none' : '';
+  renderVideoGrid();
+  switchTab('videos');
+}
+
+async function startVideoGen() {
+  const pending = vidItems.filter(v => v.status !== 'done' && v.status !== 'generating');
+  if (!pending.length) { toast('没有待生成的视频任务', 'info'); return; }
+
+  const conc = parseInt(document.getElementById('concurrency').value);
+  const queue = [...pending];
+  let active = 0;
+
+  const tick = () => {
+    while (queue.length > 0 && active < conc) {
+      const v = queue.shift();
+      active++;
+      runVideo(v).finally(() => { active--; tick(); });
+    }
+  };
+  tick();
+}
+
+async function runVideo(v) {
+  v.status = 'generating';
+  v.progress = 0;
+  renderVideoCard(v.id);
+
+  const isMock = document.getElementById('vid-model').value === 'mock';
+  const progTimer = setInterval(() => {
+    if (v.progress < 85) { v.progress += 3 + Math.random() * 7; renderVideoCard(v.id); }
+  }, 500);
+
+  try {
+    if (isMock) {
+      await sleep(3000 + Math.random() * 4000);
+      v.status = 'done';
+      v.videoUrl = null; // no actual video in mock
+      toast(`✓ ${v.id} 视频任务完成（Mock 模式）`, 'success');
+    } else {
+      // Sync prompt from textarea
+      const ta = document.getElementById(`vprompt-${v.id}`);
+      if (ta) v.prompt = ta.value;
+
+      const result = await submitVideoTask(v);
+      v.taskId = result.taskId;
+
+      // Poll
+      for (let i = 0; i < 180; i++) {
+        await sleep(3000);
+        const poll = await pollVideoTask(v.taskId);
+        if (poll.done) {
+          v.videoUrl = poll.videoUrl;
+          break;
+        }
+        v.progress = Math.min(v.progress + 1.5, 90);
+        renderVideoCard(v.id);
+      }
+      if (!v.videoUrl) throw new Error('视频任务超时（最长等待 9 分钟）');
+      v.status = 'done';
+      toast(`✓ ${v.id} 视频生成完成`, 'success');
+    }
+  } catch(e) {
+    v.status = 'failed';
+    v.error = e.message;
+    toast(`✗ ${v.id}: ${e.message}`, 'error');
+  }
+
+  clearInterval(progTimer);
+  v.progress = 100;
+  renderVideoCard(v.id);
+}
+
+async function regenVideo(id) {
+  const v = vidItems.find(x => x.id === id);
+  if (!v || v.status === 'generating') return;
+  v.videoUrl = null;
+  v.progress = 0;
+  v.error = null;
+  const ta = document.getElementById(`vprompt-${id}`);
+  if (ta) v.prompt = ta.value;
+  await runVideo(v);
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER — IMAGE
+// ════════════════════════════════════════════════════════
+function renderImageGrid() {
+  const grid = document.getElementById('img-grid');
+  grid.innerHTML = '';
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.id = `card-${item.id}`;
+    card.className = 'img-card' + (item.selected ? ' selected' : '');
+    card.innerHTML = buildCardHTML(item);
+    grid.appendChild(card);
+    setCardTextarea(item.id);  // DOM 赋值 textarea
+  });
+}
+
+// 把 OSS 图片 URL 转成走本地代理的 URL，解决直连不稳定问题
+function proxyImgUrl(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    // dashscope-a717.oss-accelerate.aliyuncs.com → /proxy/oss/...
+    if (u.hostname.endsWith('.aliyuncs.com')) {
+      return `${PROXY_BASE}/proxy/oss${u.pathname}${u.search}`;
+    }
+  } catch(e) {}
+  return url;
+}
+
+// HTML 转义，防止特殊字符破坏模板 / 乱码
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+function buildCardHTML(item) {
+  const LABEL = {idle:'待生成',generating:'生成中',done:'完成',failed:'失败'};
+
+  let preview = '';
+  if (item.url) {
+    const dispUrl = item.displayUrl || item.url;
+    preview = `<img src="${esc(dispUrl)}" alt="${esc(item.id)}" onclick="openPreview('${esc(item.id)}')">`;
+  } else {
+    preview = `<div class="img-placeholder">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      <span>${LABEL[item.status]}</span>
+    </div>`;
+  }
+
+  let overlay = '';
+  if (item.status === 'generating') {
+    overlay = `<div class="status-overlay">
+      <div class="spinner"></div>
+      <div class="prog-wrap"><div class="prog-fill" style="width:${Math.min(item.progress,97)}%"></div></div>
+      <div class="status-text">生成中…</div>
+    </div>`;
+  } else if (item.status === 'failed') {
+    overlay = `<div class="status-overlay">
+      <div style="font-size:22px">⚠</div>
+      <div class="status-text" style="color:var(--red)">${esc(item.error || '生成失败')}</div>
+    </div>`;
+  }
+
+  let actions = '';
+  if (item.status === 'done') {
+    actions = `
+      <button class="btn btn-ghost" onclick="regenItem('${esc(item.id)}')">↺ 重新生图</button>
+      <button class="btn btn-ghost" onclick="downloadImg('${esc(item.id)}')">⬇ 下载</button>
+      <button class="btn ${item.selected ? 'btn-green' : 'btn-ghost'}" onclick="toggleSelect('${esc(item.id)}')">${item.selected ? '✓ 已选中' : '+ 选中'}</button>`;
+  } else if (item.status === 'failed') {
+    actions = `<button class="btn btn-danger" onclick="regenItem('${esc(item.id)}')">↺ 重试</button>`;
+  }
+
+  const metaTags = buildMetaTags(item);
+  const descHtml = item.image_desc
+    ? `<div class="img-desc">${esc(item.image_desc)}</div>` : '';
+
+  // ── 知识点区（可编辑）──
+  const kpHtml = `
+    <div class="kp-box" id="kp-box-${esc(item.id)}">
+      <div class="kp-header">
+        <div class="kp-label">📚 知识点</div>
+        <button class="kp-edit-btn" onclick="startEditKP('${esc(item.id)}')">✏ 编辑</button>
+      </div>
+      <div class="kp-text" id="kp-text-${esc(item.id)}">${item.knowledge_point ? esc(item.knowledge_point) : '<span style="color:var(--text3);font-style:italic">暂无知识点，点击编辑添加</span>'}</div>
+    </div>`;
+
+  // ── 修改意见 + 历史 ──
+  const comments = item.comments || [];
+  const commentHistoryHtml = comments.length > 0
+    ? comments.map(c => `
+      <div class="comment-item">
+        <div class="comment-item-meta">
+          <span class="comment-item-time">${esc(c.time)}</span>
+        </div>
+        <div class="comment-item-text">${esc(c.text)}</div>
+      </div>`).join('')
+    : `<div class="comment-empty">暂无修改意见</div>`;
+
+  const commentSection = `
+    <div class="comment-section">
+      <div class="comment-label">✏️ 修改意见（${comments.length}条）</div>
+      <div class="comment-history">${commentHistoryHtml}</div>
+      <div class="comment-input-wrap">
+        <textarea class="comment-textarea" id="cinput-${esc(item.id)}" placeholder="输入修改意见…" rows="2"></textarea>
+        <button class="comment-submit" onclick="addComment('${esc(item.id)}')">提交</button>
+      </div>
+    </div>`;
+
+  // ── 单张图片生成历史 ──
+  const genHistory = item.genHistory || [];
+  const genHistoryHtml = genHistory.length > 0
+    ? genHistory.map((h, i) => `
+      <div class="gen-history-item" title="点击恢复此版本">
+        <img class="gen-history-thumb" src="${esc(h.displayUrl || h.url)}" onerror="this.style.opacity='.3'">
+        <div class="gen-history-info">
+          <div class="gen-history-time">${esc(h.time)}</div>
+          <div class="gen-history-prompt">${esc(h.prompt)}</div>
+        </div>
+        <button class="gen-history-restore" onclick="restoreGenHistory('${esc(item.id)}',${i})">恢复</button>
+      </div>`).join('')
+    : `<div class="comment-empty">暂无生成记录</div>`;
+
+  const genHistorySection = `
+    <div class="gen-history-section">
+      <div class="gen-history-label">
+        🖼 生成历史（${genHistory.length}条）
+        <button class="gen-history-toggle" onclick="toggleGenHistory('${esc(item.id)}')">
+          ${item._ghOpen ? '收起 ▲' : '展开 ▼'}
+        </button>
+      </div>
+      <div class="gen-history-list" id="gh-list-${esc(item.id)}" style="${item._ghOpen ? '' : 'display:none'}">
+        ${genHistoryHtml}
+      </div>
+    </div>`;
+
+  return `
+    <div class="img-check" onclick="toggleSelect('${esc(item.id)}')">✓</div>
+    <div class="status-badge ${item.status}">${LABEL[item.status]}</div>
+    <div class="img-preview">${preview}${overlay}</div>
+    <div class="img-card-body">
+      <div class="img-meta">
+        <span class="img-id">${esc(item.id)}</span>
+        <span class="img-size-badge">${item.width}×${item.height}</span>
+      </div>
+      ${metaTags}
+      ${descHtml}
+      ${kpHtml}
+      <textarea class="prompt-textarea" id="prompt-${esc(item.id)}" data-item-id="${esc(item.id)}"></textarea>
+      <div class="card-actions">${actions}</div>
+      ${genHistorySection}
+      ${commentSection}
+    </div>`;
+}
+
+// textarea 内容用 DOM 赋值，避免 innerHTML 转义问题
+function setCardTextarea(id) {
+  const item = items.find(x => x.id === id);
+  const ta = document.getElementById(`prompt-${id}`);
+  if (item && ta) {
+    ta.value = item.prompt;
+    ta.oninput = () => { item.prompt = ta.value; markDirty(); };
+  }
+}
+
+// 添加修改评论
+function addComment(id) {
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  const ta = document.getElementById(`cinput-${id}`);
+  if (!ta) return;
+  const text = ta.value.trim();
+  if (!text) { toast('请输入修改意见', 'error'); return; }
+
+  if (!item.comments) item.comments = [];
+  const now = new Date();
+  const timeStr = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  item.comments.push({ time: timeStr, text });
+  markDirty();
+  renderCard(id);
+  toast(`✓ 已添加修改意见`, 'success');
+}
+
+// ── 知识点编辑 ──
+function startEditKP(id) {
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  const box = document.getElementById(`kp-box-${id}`);
+  if (!box) return;
+
+  // 替换为编辑态
+  box.innerHTML = `
+    <div class="kp-header">
+      <div class="kp-label">📚 知识点</div>
+    </div>
+    <textarea class="kp-input" id="kp-input-${esc(id)}" rows="3">${esc(item.knowledge_point || '')}</textarea>
+    <div class="kp-save-row">
+      <button class="kp-save-btn" onclick="saveKP('${esc(id)}')">✓ 保存</button>
+      <button class="kp-cancel-btn" onclick="cancelEditKP('${esc(id)}')">取消</button>
+    </div>`;
+
+  const ta = document.getElementById(`kp-input-${id}`);
+  if (ta) { ta.focus(); ta.selectionStart = ta.value.length; }
+}
+
+function saveKP(id) {
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  const ta = document.getElementById(`kp-input-${id}`);
+  if (!ta) return;
+  const newVal = ta.value.trim();
+  item.knowledge_point = newVal;
+  markDirty();
+  renderCard(id);
+  toast('✓ 知识点已保存', 'success');
+}
+
+function cancelEditKP(id) {
+  renderCard(id);  // 直接重渲还原
+}
+
+// ── 生成历史展开/收起 ──
+function toggleGenHistory(id) {
+  const item = items.find(x => x.id === id);
+  if (!item) return;
+  item._ghOpen = !item._ghOpen;
+  const list = document.getElementById(`gh-list-${id}`);
+  const btn = list?.previousElementSibling?.querySelector('.gen-history-toggle');
+  if (list) list.style.display = item._ghOpen ? '' : 'none';
+  if (btn) btn.textContent = item._ghOpen ? '收起 ▲' : '展开 ▼';
+}
+
+// ── 恢复某条生成历史版本 ──
+function restoreGenHistory(id, index) {
+  const item = items.find(x => x.id === id);
+  if (!item || !item.genHistory || !item.genHistory[index]) return;
+  const h = item.genHistory[index];
+  // 恢复 url + prompt
+  item.url = h.url;
+  item.displayUrl = h.displayUrl || h.url;
+  item.prompt = h.prompt;
+  item.status = 'done';
+  item.progress = 100;
+  markDirty();
+  renderCard(id);
+  toast(`↩ 已恢复 ${item.id} 到 ${h.time} 的版本`, 'success');
+}
+
+// group / type 标签 HTML
+function buildMetaTags(item) {
+  let tags = '';
+  if (item.group) tags += `<span class="meta-tag tag-group">${esc(item.group)}</span>`;
+  if (item.knowledge_point) tags += `<span class="meta-tag tag-kp">📚 ${esc(item.knowledge_point)}</span>`;
+  if (item.asset_type) tags += `<span class="meta-tag tag-type">${esc(item.asset_type)}</span>`;
+  if (item.video_prompts && item.video_prompts.length > 0)
+    tags += `<span class="meta-tag tag-vid">🎬 ${item.video_prompts.length}条视频</span>`;
+  return tags ? `<div class="meta-tags">${tags}</div>` : '';
+}
+
+function renderCard(id) {
+  const item = items.find(x => x.id === id);
+  const card = document.getElementById(`card-${id}`);
+  if (!item || !card) return;
+  card.className = 'img-card' + (item.selected ? ' selected' : '');
+  card.innerHTML = buildCardHTML(item);
+  setCardTextarea(id);  // DOM 赋值 textarea
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER — VIDEO
+// ════════════════════════════════════════════════════════
+function buildVideoHTML(v) {
+  const LABEL = {idle:'待生成',generating:'生成中',done:'完成',failed:'失败'};
+
+  let preview = '';
+  if (v.videoUrl) {
+    preview = `<video src="${v.videoUrl}" controls style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>`;
+  } else {
+    preview = `<img src="${v.srcUrl}" alt="">
+      <div class="play-btn" onclick="startVideoGen()">▶</div>`;
+  }
+
+  let overlay = '';
+  if (v.status === 'generating') {
+    overlay = `<div class="status-overlay">
+      <div class="spinner"></div>
+      <div class="prog-wrap"><div class="prog-fill" style="width:${Math.min(v.progress,97)}%"></div></div>
+      <div class="status-text">视频生成中…（预计 1-3 分钟）</div>
+    </div>`;
+  } else if (v.status === 'failed') {
+    overlay = `<div class="status-overlay">
+      <div style="font-size:22px">⚠</div>
+      <div class="status-text" style="color:var(--red)">${esc(v.error || '生成失败')}</div>
+    </div>`;
+  }
+
+  let actions = '';
+  if (v.status === 'done') {
+    actions = `
+      <button class="btn btn-ghost" onclick="regenVideo('${v.id}')">↺ 重新生成</button>
+      <button class="btn btn-ghost" onclick="downloadVid('${v.id}')">⬇ 下载</button>`;
+  } else if (v.status === 'failed') {
+    actions = `<button class="btn btn-danger" onclick="regenVideo('${v.id}')">↺ 重试</button>`;
+  } else {
+    actions = `<button class="btn btn-ghost" onclick="regenVideo('${v.id}')">▶ 单独生成</button>`;
+  }
+
+  return `
+    <div class="status-badge ${v.status}" style="position:absolute;top:10px;right:10px;z-index:10">${LABEL[v.status]}</div>
+    <div class="video-preview" style="position:relative">${preview}${overlay}</div>
+    <div class="vid-card-body">
+      <div class="src-row">
+        <img class="src-thumb" src="${v.srcUrl}" alt="">
+        <div style="flex:1;min-width:0">
+          <div>${esc(v.srcId)} · ${v.width}×${v.height} · ${v.duration}s</div>
+          ${v.vidType ? `<span class="meta-tag tag-type" style="font-size:10px">${esc(v.vidType)}</span>` : ''}
+        </div>
+      </div>
+      <textarea class="prompt-textarea" id="vprompt-${esc(v.id)}"></textarea>
+      <div class="card-actions">${actions}</div>
+    </div>`;
+}
+
+function setVideoTextarea(id) {
+  const v = vidItems.find(x => x.id === id);
+  const ta = document.getElementById(`vprompt-${id}`);
+  if (v && ta) {
+    ta.value = v.prompt;
+    ta.oninput = () => { v.prompt = ta.value; };
+  }
+}
+
+function renderVideoCard(id) {
+  const v = vidItems.find(x => x.id === id);
+  const card = document.getElementById(`vcard-${v.id}`);
+  if (!v || !card) return;
+  card.innerHTML = buildVideoHTML(v);
+  setVideoTextarea(id);
+}
+
+function renderVideoGrid() {
+  const grid = document.getElementById('vid-grid');
+  grid.innerHTML = '';
+  vidItems.forEach(v => {
+    const card = document.createElement('div');
+    card.id = `vcard-${v.id}`;
+    card.className = 'video-card';
+    card.innerHTML = buildVideoHTML(v);
+    grid.appendChild(card);
+    setVideoTextarea(v.id);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  SELECTION & STATS
+// ════════════════════════════════════════════════════════
+function toggleSelect(id) {
+  const item = items.find(x => x.id === id);
+  if (!item || item.status !== 'done') return;
+  item.selected = !item.selected;
+  renderCard(id);
+  updateSelBar();
+}
+
+function selectAll() {
+  items.filter(x => x.status === 'done').forEach(x => x.selected = true);
+  renderImageGrid(); updateSelBar();
+}
+
+function deselectAll() {
+  items.forEach(x => x.selected = false);
+  renderImageGrid(); updateSelBar();
+}
+
+function updateSelBar() {
+  const n = items.filter(x => x.selected).length;
+  document.getElementById('sel-count').textContent = n;
+  document.getElementById('sel-bar').classList.toggle('show', n > 0);
+}
+
+function updateStats() {
+  document.getElementById('s-done').textContent = items.filter(x=>x.status==='done').length;
+  document.getElementById('s-pend').textContent = items.filter(x=>x.status==='generating').length;
+  document.getElementById('s-fail').textContent = items.filter(x=>x.status==='failed').length;
+}
+
+// ════════════════════════════════════════════════════════
+//  DOWNLOAD
+// ════════════════════════════════════════════════════════
+function downloadImg(id) {
+  const item = items.find(x => x.id === id);
+  if (!item?.url) { toast('图片未生成', 'error'); return; }
+  triggerDownload(item.url, `${item.id}.jpg`);
+  toast(`下载: ${item.id}`, 'success');
+}
+
+function downloadAll() {
+  const done = items.filter(x => x.status === 'done' && x.url);
+  if (!done.length) { toast('没有已完成的图片', 'error'); return; }
+  done.forEach((item, i) => setTimeout(() => triggerDownload(item.url, `${item.id}.jpg`), i * 300));
+  toast(`开始下载 ${done.length} 张图片`, 'success');
+}
+
+function downloadSelected() {
+  const sel = items.filter(x => x.selected && x.url);
+  if (!sel.length) { toast('没有选中图片', 'error'); return; }
+  sel.forEach((item, i) => setTimeout(() => triggerDownload(item.url, `${item.id}.jpg`), i * 300));
+  toast(`下载 ${sel.length} 张图片`, 'success');
+}
+
+function downloadVid(id) {
+  const v = vidItems.find(x => x.id === id);
+  if (!v?.videoUrl) { toast('视频未生成', 'error'); return; }
+  triggerDownload(v.videoUrl, `${v.id}.mp4`);
+  toast(`下载: ${v.id}`, 'success');
+}
+
+function downloadAllVids() {
+  const done = vidItems.filter(x => x.status === 'done' && x.videoUrl);
+  if (!done.length) { toast('没有已完成的视频', 'error'); return; }
+  done.forEach((v, i) => setTimeout(() => triggerDownload(v.videoUrl, `${v.id}.mp4`), i * 400));
+  toast(`开始下载 ${done.length} 个视频`, 'success');
+}
+
+function triggerDownload(url, filename) {
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.target = '_blank'; a.click();
+}
+</script>
+</body>
+</html>
