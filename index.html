@@ -213,6 +213,14 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .history-stat{font-size:10px;padding:2px 7px;border-radius:8px;background:var(--bg4);color:var(--text3)}
 .history-stat.ok{color:var(--accent3);background:rgba(6,214,160,.1)}
 .history-item-thumbs{display:flex;gap:4px;margin-top:8px;overflow:hidden}
+.hpanel-expand-btn{margin-top:8px;font-size:11px;color:var(--accent);cursor:pointer;user-select:none;padding:3px 0}.hpanel-expand-btn:hover{text-decoration:underline}
+.hpanel-detail{margin-top:6px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:10px}
+.hpanel-img-row{display:flex;flex-direction:column;gap:4px}
+.hpanel-img-label{font-size:10px;color:var(--text3);word-break:break-all}
+.hpanel-gh-list{display:flex;flex-wrap:wrap;gap:6px}
+.hpanel-gh-item{display:flex;flex-direction:column;align-items:center;gap:2px}
+.hpanel-gh-thumb{width:52px;height:52px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer}
+.hpanel-gh-time{font-size:9px;color:var(--text3);font-family:'Space Mono',monospace}
 .history-thumb{width:46px;height:46px;border-radius:5px;object-fit:cover;background:var(--bg4);flex-shrink:0}
 .history-thumb-more{width:46px;height:46px;border-radius:5px;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3);flex-shrink:0}
 .history-empty{text-align:center;color:var(--text3);font-size:13px;padding:40px 0}
@@ -607,6 +615,21 @@ function renderHistoryPanel() {
     ).join('');
     const more = doneItems.length > 4 ? `<div class="history-thumb-more">+${doneItems.length - 4}</div>` : '';
 
+    // 每张图的生成历史展开区域
+    const itemGenHistoryHtml = doneItems.map(it => {
+      const gh = it.genHistory || [];
+      if (!gh.length) return '';
+      return `<div class="hpanel-img-row">
+        <div class="hpanel-img-label">${esc(it.id)}${it.knowledge_point ? ` · <span style="color:var(--accent)">📚${esc(it.knowledge_point)}</span>` : ''}</div>
+        <div class="hpanel-gh-list">
+          ${gh.map(h => `<div class="hpanel-gh-item">
+            <img class="hpanel-gh-thumb" src="${esc(h.displayUrl||h.url)}" onerror="this.style.opacity='.3'" title="${esc(h.prompt)}">
+            <div class="hpanel-gh-time">${esc(h.time)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
     return `<div class="history-item" id="hitem-${esc(r.id)}">
       <div class="history-item-header" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">
         <span class="history-item-title" id="hname-${esc(r.id)}">${esc(r.name || r.id)}</span>
@@ -622,6 +645,10 @@ function renderHistoryPanel() {
         <span class="history-stat">${esc(r.model.replace('wan2.6-t2i','Wan2.6').replace('wanx2.1-t2i-turbo','Wanx2.1'))}</span>
       </div>
       <div class="history-item-thumbs" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">${thumbs}${more}</div>
+      ${itemGenHistoryHtml ? `
+      <div class="hpanel-expand-btn" onclick="toggleHPanelDetail('${esc(r.id)}',this)">▶ 查看各图生成历史</div>
+      <div class="hpanel-detail" id="hpdetail-${esc(r.id)}" style="display:none">${itemGenHistoryHtml}</div>
+      ` : ''}
     </div>`;
   }).join('');
 }
@@ -659,6 +686,15 @@ function loadHistoryToGrid(recordId) {
   updateStats();
   updateSelBar();
   toast(`📋 已加载「${r.name}」，共 ${r.total} 张 · 修改后可保存`, 'info');
+}
+
+// 展开/收起历史面板内的单图生成历史
+function toggleHPanelDetail(recordId, btn) {
+  const detail = document.getElementById(`hpdetail-${recordId}`);
+  if (!detail) return;
+  const open = detail.style.display === 'none';
+  detail.style.display = open ? '' : 'none';
+  btn.textContent = open ? '▼ 收起各图生成历史' : '▶ 查看各图生成历史';
 }
 
 // 重命名历史记录
@@ -1417,6 +1453,7 @@ async function runItem(item) {
     const timeStr = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
     item.genHistory.unshift({ url, displayUrl: proxyImgUrl(url), prompt: item.prompt, time: timeStr });
     if (item.genHistory.length > 20) item.genHistory = item.genHistory.slice(0, 20); // 最多保留 20 条
+    persistItemChange(item.id); // 立即持久化生成历史
     toast(`✓ ${item.id} 生成完成`, 'success');
   } catch(e) {
     clearInterval(progTimer);
