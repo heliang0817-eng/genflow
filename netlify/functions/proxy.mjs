@@ -74,7 +74,7 @@ export const handler = async (event, context) => {
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v3' }),
+      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v4' }),
     };
   }
 
@@ -134,15 +134,16 @@ export const handler = async (event, context) => {
   const ARK_KEY       = process.env.ARK_KEY       || (_a1 + _a2);
   const apiKey = service === 'ark' ? ARK_KEY : DASHSCOPE_KEY;
 
-  const reqHeaders = { ...(event.headers || {}) };
+  // 从头构建干净的请求头，避免大小写冲突
+  const skipHeaders = new Set(['host','origin','referer','accept-encoding',
+    'x-forwarded-for','x-forwarded-host','x-forwarded-proto','authorization',
+    'content-length','connection','transfer-encoding']);
+  const reqHeaders = {};
+  for (const [k, v] of Object.entries(event.headers || {})) {
+    if (!skipHeaders.has(k.toLowerCase())) reqHeaders[k.toLowerCase()] = v;
+  }
   reqHeaders['host'] = targetHostname;
   reqHeaders['authorization'] = `Bearer ${apiKey}`;
-  delete reqHeaders['origin'];
-  delete reqHeaders['referer'];
-  delete reqHeaders['accept-encoding'];
-  delete reqHeaders['x-forwarded-for'];
-  delete reqHeaders['x-forwarded-host'];
-  delete reqHeaders['x-forwarded-proto'];
 
   console.log(`[GenFlow] ${event.httpMethod} ${targetUrl}`);
 
