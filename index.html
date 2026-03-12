@@ -149,6 +149,8 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .comment-item{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:7px 9px}
 .comment-item-meta{display:flex;align-items:center;gap:6px;margin-bottom:2px}
 .comment-item-time{font-size:9px;color:var(--text3);font-family:'Space Mono',monospace}
+.comment-item-meta{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.comment-del-btn{background:none;border:none;cursor:pointer;font-size:11px;opacity:0.4;padding:0 2px;line-height:1;transition:opacity .15s}.comment-del-btn:hover{opacity:1}
 .comment-item-text{font-size:11px;color:var(--text2);line-height:1.5;white-space:pre-wrap;word-break:break-all}
 .comment-input-wrap{display:flex;gap:5px;align-items:flex-end}
 .comment-textarea{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:6px 8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:12px;resize:none;outline:none;min-height:44px;line-height:1.5;transition:border-color .2s}
@@ -1684,10 +1686,11 @@ function buildCardHTML(item) {
   // ── 修改意见 + 历史 ──
   const comments = item.comments || [];
   const commentHistoryHtml = comments.length > 0
-    ? comments.map(c => `
+    ? comments.map((c, ci) => `
       <div class="comment-item">
         <div class="comment-item-meta">
           <span class="comment-item-time">${esc(c.time)}</span>
+          <button class="comment-del-btn" onclick="deleteComment('${esc(item.id)}',${ci})" title="删除此意见">🗑</button>
         </div>
         <div class="comment-item-text">${esc(c.text)}</div>
       </div>`).join('')
@@ -1772,9 +1775,38 @@ function addComment(id) {
   const now = new Date();
   const timeStr = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   item.comments.push({ time: timeStr, text });
-  markDirty();
+  ta.value = '';
+  persistItemChange(id);
   renderCard(id);
   toast(`✓ 已添加修改意见`, 'success');
+}
+
+// 删除某条修改意见
+function deleteComment(id, index) {
+  const item = items.find(x => x.id === id);
+  if (!item || !item.comments) return;
+  item.comments.splice(index, 1);
+  persistItemChange(id);
+  renderCard(id);
+  toast('🗑 已删除', 'success');
+}
+
+// 立即将当前 item 变更持久化到对应历史记录
+function persistItemChange(id) {
+  markDirty();
+  if (!activeRecordId) return;
+  const records = loadHistory();
+  const r = records.find(x => x.id === activeRecordId);
+  if (!r) return;
+  const target = r.items.find(x => x.id === id);
+  const src = items.find(x => x.id === id);
+  if (!target || !src) return;
+  target.knowledge_point = src.knowledge_point || '';
+  target.comments = src.comments ? [...src.comments] : [];
+  target.genHistory = src.genHistory ? [...src.genHistory] : [];
+  saveHistory(records);
+  recordDirty = false;
+  updateSaveBtn();
 }
 
 // ── 知识点编辑 ──
@@ -1806,7 +1838,7 @@ function saveKP(id) {
   if (!ta) return;
   const newVal = ta.value.trim();
   item.knowledge_point = newVal;
-  markDirty();
+  persistItemChange(id);
   renderCard(id);
   toast('✓ 知识点已保存', 'success');
 }
