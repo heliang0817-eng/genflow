@@ -2,16 +2,13 @@
   publish = "."
   functions = "netlify/functions"
 
-[[edge_functions]]
-  function = "proxy"
-  path = "/api/proxy"
-
-[[edge_functions]]
-  function = "proxy"
-  path = "/api/proxy/*"
+# /api/proxy/* → Netlify Function
+[[redirects]]
+  from = "/api/proxy/*"
+  to = "/.netlify/functions/proxy/:splat"
+  status = 200
 
 [[headers]]
   for = "/*"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
-    X-Content-Type-Options = "nosniff"

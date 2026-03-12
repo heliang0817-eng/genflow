@@ -1,9 +1,8 @@
 /**
- * GenFlow Proxy — Netlify Edge Function
- * 路由: /api/proxy/dashscope/... → dashscope.aliyuncs.com
- *       /api/proxy/ark/...       → ark.ap-southeast.bytepluses.com
- *       /api/proxy/oss/...       → dashscope-a717.oss-accelerate.aliyuncs.com
+ * GenFlow Proxy — Netlify Serverless Function
+ * 触发路径: /.netlify/functions/proxy/* (通过 netlify.toml redirect 映射到 /api/proxy/*)
  */
+import https from 'https';
 
 const ROUTES = {
   'dashscope': 'https://dashscope.aliyuncs.com',
@@ -11,86 +10,107 @@ const ROUTES = {
   'oss':       'https://dashscope-a717.oss-accelerate.aliyuncs.com',
 };
 
-const CORS_HEADERS = {
+const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
   'Access-Control-Allow-Headers': 'Content-Type, X-DashScope-Async, Accept',
   'Access-Control-Max-Age': '86400',
 };
 
-export default async (request, context) => {
+// Netlify Serverless Function handler
+export const handler = async (event, context) => {
   // CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers: CORS_HEADERS });
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers: CORS, body: '' };
   }
 
-  const url = new URL(request.url);
-  // 路径格式: /api/proxy/{service}/...
-  // Netlify Functions 实际路径: /.netlify/functions/proxy/{service}/...
-  // 通过 redirect 映射到 /api/proxy
-  const pathParts = url.pathname
-    .replace(/^\/.netlify\/functions\/proxy\/?/, '')
-    .replace(/^\/api\/proxy\/?/, '')
-    .split('/').filter(Boolean);
-
-  const service = pathParts[0];
+  // 从路径提取 service: /api/proxy/{service}/...
+  const rawPath = event.path || '';
+  const stripped = rawPath
+    .replace(/^\/.netlify\/functions\/proxy/, '')
+    .replace(/^\/api\/proxy/, '')
+    .replace(/^\//, '');
+  const parts = stripped.split('/').filter(Boolean);
+  const service = parts[0];
 
   // 健康检查
   if (!service || service === 'health') {
-    return new Response(JSON.stringify({ status: 'ok', version: 'netlify-v1' }), {
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 200,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v1' }),
+    };
   }
 
   const targetBase = ROUTES[service];
   if (!targetBase) {
-    return new Response(JSON.stringify({ error: 'unknown_service', service }), {
-      status: 404, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 404,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'unknown_service', service }),
+    };
   }
 
-  // 剩余路径
-  const restPath = '/' + pathParts.slice(1).join('/');
-  const targetUrl = targetBase + restPath + url.search;
+  const restPath = '/' + parts.slice(1).join('/');
+  const queryStr = event.rawQuery ? '?' + event.rawQuery : '';
+  const targetUrl = targetBase + restPath + queryStr;
+  const targetHostname = new URL(targetBase).hostname;
 
-  // 选择 API Key（服务端保存，用户不可见）
-  const DASHSCOPE_KEY = Netlify.env.get('DASHSCOPE_KEY') || '***DASHSCOPE_KEY_REMOVED***';
-  const ARK_KEY = Netlify.env.get('ARK_KEY') || '***ARK_KEY_REMOVED***';
-  const isArk = service === 'ark';
-  const apiKey = isArk ? ARK_KEY : DASHSCOPE_KEY;
+  // API Key（服务端，用户不可见）
+  const DASHSCOPE_KEY = process.env.DASHSCOPE_KEY || '***DASHSCOPE_KEY_REMOVED***';
+  const ARK_KEY       = process.env.ARK_KEY       || '***ARK_KEY_REMOVED***';
+  const apiKey = service === 'ark' ? ARK_KEY : DASHSCOPE_KEY;
 
-  // 构建新请求头
-  const newHeaders = new Headers();
-  for (const [k, v] of request.headers.entries()) {
-    const kl = k.toLowerCase();
-    if (['origin','referer','accept-encoding','host'].includes(kl)) continue;
-    newHeaders.set(k, v);
-  }
-  newHeaders.set('host', new URL(targetBase).hostname);
-  newHeaders.set('authorization', `Bearer ${apiKey}`);
+  // 构建请求头
+  const reqHeaders = { ...(event.headers || {}) };
+  reqHeaders['host'] = targetHostname;
+  reqHeaders['authorization'] = `Bearer ${apiKey}`;
+  delete reqHeaders['origin'];
+  delete reqHeaders['referer'];
+  delete reqHeaders['accept-encoding'];
+  delete reqHeaders['x-forwarded-for'];
+  delete reqHeaders['x-forwarded-host'];
+  delete reqHeaders['x-forwarded-proto'];
 
-  console.log(`[GenFlow] ${request.method} ${targetUrl}`);
+  console.log(`[GenFlow] ${event.httpMethod} ${targetUrl}`);
 
-  try {
-    const hasBody = !['GET','HEAD'].includes(request.method);
-    const resp = await fetch(targetUrl, {
-      method: request.method,
-      headers: newHeaders,
-      body: hasBody ? request.body : undefined,
+  // 发起代理请求
+  const result = await new Promise((resolve, reject) => {
+    const targetUrlObj = new URL(targetUrl);
+    const options = {
+      hostname: targetHostname,
+      port: 443,
+      path: targetUrlObj.pathname + (targetUrlObj.search || ''),
+      method: event.httpMethod,
+      headers: reqHeaders,
+    };
+
+    const req = https.request(options, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode,
+          contentType: res.headers['content-type'] || 'application/json',
+          body: Buffer.concat(chunks),
+        });
+      });
     });
 
-    const outHeaders = new Headers(CORS_HEADERS);
-    outHeaders.set('Content-Type', resp.headers.get('Content-Type') || 'application/json');
+    req.on('error', reject);
 
-    return new Response(resp.body, {
-      status: resp.status,
-      headers: outHeaders,
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'proxy_error', message: err.message }), {
-      status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
-    });
-  }
+    if (event.body) {
+      req.write(event.isBase64Encoded
+        ? Buffer.from(event.body, 'base64')
+        : event.body);
+    }
+    req.end();
+  });
+
+  return {
+    statusCode: result.statusCode,
+    headers: { ...CORS, 'Content-Type': result.contentType },
+    body: result.body.toString('base64'),
+    isBase64Encoded: true,
+  };
 };
-
-export const config = { path: ['/api/proxy', '/api/proxy/*'] };
