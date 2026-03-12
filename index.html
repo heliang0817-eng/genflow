@@ -446,7 +446,9 @@ async function checkProxy() {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
-    await fetch(`${getProxyBase()}/`, { method: 'GET', signal: controller.signal });
+    const pb = getProxyBase();
+    const healthUrl = pb.includes('localhost') ? `${pb}/health` : `${pb}/api/proxy/health`;
+    await fetch(healthUrl, { method: 'GET', signal: controller.signal });
     clearTimeout(timer);
     return true;
   } catch(e) {
@@ -1000,16 +1002,21 @@ function parseSize(raw) {
 // 通过本地代理避免浏览器 CORS 限制
 // 代理服务: node proxy.mjs (端口 8767)
 // 支持自定义代理地址（公网部署时通过 URL 参数 ?proxy=https://xxx 指定）
+// 默认代理地址：Vercel 部署（固定不变）
+const DEFAULT_PROXY = 'https://genflow-gamma.vercel.app';
+
 function getProxyBase() {
   const urlParam = new URLSearchParams(window.location.search).get('proxy');
   if (urlParam) return urlParam.replace(/\/$/, '');
   const stored = localStorage.getItem('proxy_base');
   if (stored) return stored.replace(/\/$/, '');
-  return 'http://localhost:8767';
+  return DEFAULT_PROXY;
 }
 const PROXY_BASE = getProxyBase();
-const DS_BASE  = `${PROXY_BASE}/proxy/dashscope/api/v1`;
-const ARK_BASE_PROXY = `${PROXY_BASE}/proxy/ark/api/v3`;
+// Vercel 路径前缀是 /api/proxy/，本地代理是 /proxy/
+const PROXY_PATH = PROXY_BASE.includes('localhost') ? '/proxy' : '/api/proxy';
+const DS_BASE  = `${PROXY_BASE}${PROXY_PATH}/dashscope/api/v1`;
+const ARK_BASE_PROXY = `${PROXY_BASE}${PROXY_PATH}/ark/api/v3`;
 console.log('[GenFlow] PROXY_BASE =', PROXY_BASE);
 console.log('[GenFlow] DS_BASE =', DS_BASE);
 console.log('[GenFlow] ARK_BASE =', ARK_BASE_PROXY);
@@ -1606,7 +1613,7 @@ function proxyImgUrl(url) {
     const u = new URL(url);
     // dashscope-a717.oss-accelerate.aliyuncs.com → /proxy/oss/...
     if (u.hostname.endsWith('.aliyuncs.com')) {
-      return `${PROXY_BASE}/proxy/oss${u.pathname}${u.search}`;
+      return `${PROXY_BASE}${PROXY_PATH}/oss${u.pathname}${u.search}`;
     }
   } catch(e) {}
   return url;
