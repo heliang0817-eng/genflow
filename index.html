@@ -640,7 +640,16 @@ function addHistoryRecord(batchItems) {
       comments: it.comments || [],
       genHistory: it.genHistory || [],
       selected: false,
-    }))
+    })),
+    vidItems: vidItems.map(v => ({
+      id: v.id,
+      srcId: v.srcId,
+      srcUrl: v.srcUrl,
+      prompt: v.prompt,
+      videoUrl: v.videoUrl || null,
+      status: v.status,
+      videoHistory: v.videoHistory || [],
+    })),
   };
   records.unshift(record);
   saveHistory(records.slice(0, 50));
@@ -700,6 +709,26 @@ function renderHistoryPanel() {
       <div class="hpanel-expand-btn" onclick="toggleHPanelDetail('${esc(r.id)}',this)">▶ 查看各图生成历史</div>
       <div class="hpanel-detail" id="hpdetail-${esc(r.id)}" style="display:none">${itemGenHistoryHtml}</div>
       ` : ''}
+      ${(() => {
+        const vids = (r.vidItems || []).filter(v => v.videoHistory && v.videoHistory.length > 0);
+        if (!vids.length) return '';
+        const vidHtml = vids.map(v => `
+          <div class="hpanel-img-row">
+            <div class="hpanel-img-label">🎬 ${esc(v.srcId || v.id)}</div>
+            <div class="hpanel-gh-list">
+              ${v.videoHistory.map(h => `
+                <div class="hpanel-gh-item">
+                  <video class="hpanel-gh-thumb" src="${esc(h.videoUrl)}" muted playsinline
+                    onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"
+                    style="width:52px;height:52px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer"></video>
+                  <div class="hpanel-gh-time">${esc(h.time)}</div>
+                </div>`).join('')}
+            </div>
+          </div>`).join('');
+        return `
+          <div class="hpanel-expand-btn" onclick="toggleHPanelDetail('vid-${esc(r.id)}',this)">▶ 查看视频生成历史</div>
+          <div class="hpanel-detail" id="hpdetail-vid-${esc(r.id)}" style="display:none">${vidHtml}</div>`;
+      })()}
     </div>`;
   }).join('');
 }
@@ -722,6 +751,16 @@ function loadHistoryToGrid(recordId) {
     comments: it.comments || [],
     genHistory: it.genHistory || [],
   }));
+
+  // 恢复 vidItems 状态（如有）
+  if (r.vidItems && r.vidItems.length > 0) {
+    vidItems = r.vidItems.map(v => ({
+      ...v,
+      progress: v.status === 'done' ? 100 : 0,
+      taskId: null,
+      videoHistory: v.videoHistory || [],
+    }));
+  }
 
   // 设置当前活跃记录
   activeRecordId = recordId;
@@ -810,6 +849,11 @@ function syncItemsToRecord(auto = false) {
     comments: it.comments || [],
     genHistory: it.genHistory || [],
     selected: false,
+  }));
+  r.vidItems = vidItems.map(v => ({
+    id: v.id, srcId: v.srcId, srcUrl: v.srcUrl,
+    prompt: v.prompt, videoUrl: v.videoUrl || null,
+    status: v.status, videoHistory: v.videoHistory || [],
   }));
 
   saveHistory(records);
@@ -1668,6 +1712,8 @@ async function runVideo(v) {
       const _vTime = `${_vNow.getMonth()+1}/${_vNow.getDate()} ${String(_vNow.getHours()).padStart(2,'0')}:${String(_vNow.getMinutes()).padStart(2,'0')}`;
       v.videoHistory.unshift({ videoUrl: v.videoUrl, prompt: v.prompt, time: _vTime });
       if (v.videoHistory.length > 10) v.videoHistory = v.videoHistory.slice(0, 10);
+      // 立即持久化视频历史到 GitHub
+      persistVideoHistory();
       toast(`✓ ${v.id} 视频生成完成`, 'success');
     }
   } catch(e) {
@@ -1679,6 +1725,24 @@ async function runVideo(v) {
   clearInterval(progTimer);
   v.progress = 100;
   renderVideoCard(v.id);
+}
+
+// 立即将 vidItems 的视频历史持久化到当前活跃记录
+function persistVideoHistory() {
+  if (!activeRecordId) return;
+  const records = loadHistory();
+  const r = records.find(x => x.id === activeRecordId);
+  if (!r) return;
+  r.vidItems = vidItems.map(v => ({
+    id: v.id,
+    srcId: v.srcId,
+    srcUrl: v.srcUrl,
+    prompt: v.prompt,
+    videoUrl: v.videoUrl || null,
+    status: v.status,
+    videoHistory: v.videoHistory || [],
+  }));
+  saveHistory(records);
 }
 
 function restoreVideo(id, index) {
