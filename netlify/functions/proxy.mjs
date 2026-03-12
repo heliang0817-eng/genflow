@@ -1,6 +1,11 @@
 /**
  * GenFlow Proxy — Netlify Serverless Function
- * 触发路径: /.netlify/functions/proxy/* (通过 netlify.toml redirect 映射到 /api/proxy/*)
+ * 路由:
+ *   /api/proxy/dashscope/... → dashscope.aliyuncs.com
+ *   /api/proxy/ark/...       → ark.ap-southeast.bytepluses.com
+ *   /api/proxy/oss/...       → dashscope-a717.oss-accelerate.aliyuncs.com
+ *   GET  /api/proxy/storage/history  → 读取共享历史
+ *   POST /api/proxy/storage/history  → 写入共享历史
  */
 import https from 'https';
 
@@ -17,14 +22,40 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-// Netlify Serverless Function handler
+const GH_TOKEN = process.env.GH_TOKEN || '';
+const GH_REPO  = process.env.GH_REPO || 'heliang0817-eng/genflow';
+const GH_FILE  = 'data/shared-history.json';
+const GH_API   = `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}`;
+
+// ── GitHub 文件读写 ──
+async function ghGet() {
+  const res = await fetch(GH_API, {
+    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+  });
+  const j = await res.json();
+  const content = Buffer.from(j.content, 'base64').toString('utf8');
+  return { data: JSON.parse(content), sha: j.sha };
+}
+
+async function ghPut(data, sha) {
+  const content = Buffer.from(JSON.stringify(data)).toString('base64');
+  const res = await fetch(GH_API, {
+    method: 'PUT',
+    headers: {
+      Authorization: `token ${GH_TOKEN}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: 'update: shared history', content, sha }),
+  });
+  return res.ok;
+}
+
 export const handler = async (event, context) => {
-  // CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
 
-  // 从路径提取 service: /api/proxy/{service}/...
   const rawPath = event.path || '';
   const stripped = rawPath
     .replace(/^\/.netlify\/functions\/proxy/, '')
@@ -33,15 +64,49 @@ export const handler = async (event, context) => {
   const parts = stripped.split('/').filter(Boolean);
   const service = parts[0];
 
-  // 健康检查
+  // ── 健康检查 ──
   if (!service || service === 'health') {
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v1' }),
+      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v2' }),
     };
   }
 
+  // ── 共享历史存储 ──
+  if (service === 'storage' && parts[1] === 'history') {
+    try {
+      if (event.httpMethod === 'GET') {
+        const { data } = await ghGet();
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        };
+      }
+      if (event.httpMethod === 'POST') {
+        const body = event.isBase64Encoded
+          ? Buffer.from(event.body, 'base64').toString('utf8')
+          : (event.body || '{}');
+        const newData = JSON.parse(body);
+        const { sha } = await ghGet();
+        await ghPut(newData, sha);
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ok: true }),
+        };
+      }
+    } catch (err) {
+      return {
+        statusCode: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: err.message }),
+      };
+    }
+  }
+
+  // ── API 代理 ──
   const targetBase = ROUTES[service];
   if (!targetBase) {
     return {
@@ -56,12 +121,10 @@ export const handler = async (event, context) => {
   const targetUrl = targetBase + restPath + queryStr;
   const targetHostname = new URL(targetBase).hostname;
 
-  // API Key（服务端，用户不可见）
-  const DASHSCOPE_KEY = process.env.DASHSCOPE_KEY || '***DASHSCOPE_KEY_REMOVED***';
-  const ARK_KEY       = process.env.ARK_KEY       || '***ARK_KEY_REMOVED***';
+  const DASHSCOPE_KEY = process.env.DASHSCOPE_KEY || '';
+  const ARK_KEY       = process.env.ARK_KEY       || '';
   const apiKey = service === 'ark' ? ARK_KEY : DASHSCOPE_KEY;
 
-  // 构建请求头
   const reqHeaders = { ...(event.headers || {}) };
   reqHeaders['host'] = targetHostname;
   reqHeaders['authorization'] = `Bearer ${apiKey}`;
@@ -74,7 +137,6 @@ export const handler = async (event, context) => {
 
   console.log(`[GenFlow] ${event.httpMethod} ${targetUrl}`);
 
-  // 发起代理请求
   const result = await new Promise((resolve, reject) => {
     const targetUrlObj = new URL(targetUrl);
     const options = {
