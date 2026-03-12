@@ -1002,8 +1002,8 @@ function parseSize(raw) {
 // 通过本地代理避免浏览器 CORS 限制
 // 代理服务: node proxy.mjs (端口 8767)
 // 支持自定义代理地址（公网部署时通过 URL 参数 ?proxy=https://xxx 指定）
-// 默认代理地址：Vercel 部署（固定不变）
-const DEFAULT_PROXY = 'https://genflow-gamma.vercel.app';
+// 默认代理地址：Netlify 部署（固定不变，国内可访问）
+const DEFAULT_PROXY = 'https://genflow-platform.netlify.app';
 
 function getProxyBase() {
   const urlParam = new URLSearchParams(window.location.search).get('proxy');
