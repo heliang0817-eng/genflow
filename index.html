@@ -178,6 +178,13 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .vid-card-body{padding:11px;display:flex;flex-direction:column;gap:8px}
 .src-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3)}
 .src-thumb{width:34px;height:34px;border-radius:5px;object-fit:cover;border:1px solid var(--border)}
+.vid-history-section{border-top:1px solid var(--border);padding-top:8px;margin-top:2px}
+.vid-hist-label{font-size:11px;color:var(--text3);cursor:pointer;user-select:none;margin-bottom:6px}.vid-hist-label:hover{color:var(--text)}
+.vid-hist-list{display:flex;flex-wrap:wrap;gap:6px}
+.vid-hist-item{display:flex;flex-direction:column;align-items:center;gap:2px;position:relative}
+.vid-hist-thumb{width:60px;height:60px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer;background:var(--bg4)}
+.vid-hist-time{font-size:9px;color:var(--text3);font-family:'Space Mono',monospace}
+.vid-hist-restore{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:10px;cursor:pointer;border-radius:3px;padding:1px 4px;opacity:0;transition:opacity .15s}.vid-hist-item:hover .vid-hist-restore{opacity:1}
 /* MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
 .modal-overlay.show{display:flex}
@@ -1566,6 +1573,7 @@ function goVideoGen() {
           duration: item.duration || 5,
           status: 'idle',
           videoUrl: null,
+          videoHistory: [],
           progress: 0,
           taskId: null,
         });
@@ -1585,6 +1593,7 @@ function goVideoGen() {
         duration: item.duration || 5,
         status: 'idle',
         videoUrl: null,
+        videoHistory: [],
         progress: 0,
         taskId: null,
       });
@@ -1653,6 +1662,12 @@ async function runVideo(v) {
       }
       if (!v.videoUrl) throw new Error('视频任务超时（最长等待 9 分钟）');
       v.status = 'done';
+      // 记录视频生成历史
+      if (!v.videoHistory) v.videoHistory = [];
+      const _vNow = new Date();
+      const _vTime = `${_vNow.getMonth()+1}/${_vNow.getDate()} ${String(_vNow.getHours()).padStart(2,'0')}:${String(_vNow.getMinutes()).padStart(2,'0')}`;
+      v.videoHistory.unshift({ videoUrl: v.videoUrl, prompt: v.prompt, time: _vTime });
+      if (v.videoHistory.length > 10) v.videoHistory = v.videoHistory.slice(0, 10);
       toast(`✓ ${v.id} 视频生成完成`, 'success');
     }
   } catch(e) {
@@ -1664,6 +1679,17 @@ async function runVideo(v) {
   clearInterval(progTimer);
   v.progress = 100;
   renderVideoCard(v.id);
+}
+
+function restoreVideo(id, index) {
+  const v = vidItems.find(x => x.id === id);
+  if (!v || !v.videoHistory || !v.videoHistory[index]) return;
+  const h = v.videoHistory[index];
+  v.videoUrl = h.videoUrl;
+  v.prompt = h.prompt;
+  v.status = 'done';
+  renderVideoCard(id);
+  toast(`↩ 已恢复 ${id} 到 ${h.time} 的版本`, 'success');
 }
 
 async function regenVideo(id) {
@@ -2031,6 +2057,24 @@ function buildVideoHTML(v) {
       </div>
       <textarea class="prompt-textarea" id="vprompt-${esc(v.id)}"></textarea>
       <div class="card-actions">${actions}</div>
+      ${(() => {
+        const vh = v.videoHistory || [];
+        if (!vh.length) return '';
+        const items = vh.map((h, i) => `
+          <div class="vid-hist-item">
+            <video class="vid-hist-thumb" src="${esc(h.videoUrl)}" muted playsinline
+              onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"
+              title="${esc(h.prompt)}"></video>
+            <div class="vid-hist-time">${esc(h.time)}</div>
+            <button class="vid-hist-restore" onclick="restoreVideo('${esc(v.id)}',${i})" title="恢复此版本">↩</button>
+          </div>`).join('');
+        return `<div class="vid-history-section">
+          <div class="vid-hist-label" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+            🎬 视频历史（${vh.length}条）<span style="font-size:10px;color:var(--accent)"> 悬停预览</span>
+          </div>
+          <div class="vid-hist-list">${items}</div>
+        </div>`;
+      })()}
     </div>`;
 }
 
