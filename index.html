@@ -524,11 +524,10 @@ function setProxyAddr() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // API Key 已移至服务端，前端不再读写 Key
-  // 启动时检查代理
   ensureProxy();
-  // 初始化历史面板（清理过期 + 显示数量）
+  // 先用本地缓存渲染，再异步加载远端
   renderHistoryPanel();
+  loadHistoryRemote().then(() => renderHistoryPanel());
 });
 
 // ════════════════════════════════════════════════════════
@@ -537,25 +536,67 @@ window.addEventListener('DOMContentLoaded', () => {
 const HISTORY_KEY = 'genflow_history';
 const HISTORY_TTL = 48 * 60 * 60 * 1000; // 48 小时
 
-function loadHistory() {
+// ── 共享历史：远端存储（GitHub via Netlify Function）──
+const STORAGE_URL = `${DEFAULT_PROXY}/api/proxy/storage/history`;
+
+// 内存缓存，避免频繁请求
+let _remoteCache = null;
+let _remoteCacheTime = 0;
+const REMOTE_CACHE_TTL = 10000; // 10s 内不重复请求
+
+async function loadHistoryRemote() {
+  const now = Date.now();
+  if (_remoteCache && now - _remoteCacheTime < REMOTE_CACHE_TTL) return _remoteCache;
+  try {
+    const res = await fetch(STORAGE_URL);
+    const j = await res.json();
+    const all = j.records || [];
+    _remoteCache = all.filter(r => (now - r.createdAt) < HISTORY_TTL);
+    _remoteCacheTime = now;
+    // 同步到 localStorage 作为离线备份
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(_remoteCache));
+    return _remoteCache;
+  } catch(e) {
+    console.warn('[GenFlow] 远端历史加载失败，使用本地缓存', e);
+    return loadHistoryLocal();
+  }
+}
+
+async function saveHistoryRemote(records) {
+  _remoteCache = records;
+  _remoteCacheTime = Date.now();
+  // 先写本地
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
+  // 异步写远端
+  try {
+    await fetch(STORAGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: records.slice(0, 50) }),
+    });
+  } catch(e) {
+    console.warn('[GenFlow] 远端历史保存失败', e);
+  }
+}
+
+function loadHistoryLocal() {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const all = JSON.parse(raw);
     const now = Date.now();
-    // 过滤掉超过 24h 的记录
     return all.filter(r => (now - r.createdAt) < HISTORY_TTL);
   } catch(e) { return []; }
 }
 
+// 同步版 loadHistory（从本地缓存读，供同步调用方使用）
+function loadHistory() {
+  return _remoteCache || loadHistoryLocal();
+}
+
+// 异步版 saveHistory（写远端）
 function saveHistory(records) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
-  } catch(e) {
-    // localStorage 满了，删最旧的一条
-    const records2 = records.slice(1);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(records2));
-  }
+  saveHistoryRemote(records); // 不阻塞
 }
 
 function addHistoryRecord(batchItems) {
@@ -800,7 +841,11 @@ function markDirty() {
 function toggleHistory() {
   const panel = document.getElementById('history-panel');
   panel.classList.toggle('open');
-  if (panel.classList.contains('open')) renderHistoryPanel();
+  if (panel.classList.contains('open')) {
+    renderHistoryPanel();
+    // 异步刷新远端最新数据
+    loadHistoryRemote().then(() => renderHistoryPanel());
+  }
 }
 
 function closeHDetail() {
