@@ -1,0 +1,13 @@
+{
+  "name": "genflow-proxy",
+  "version": "3.0.0",
+  "description": "GenFlow API Proxy - secure server-side key injection",
+  "type": "module",
+  "main": "proxy.mjs",
+  "scripts": {
+    "start": "node proxy.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
