@@ -8,6 +8,10 @@
   to = "/.netlify/functions/proxy/:splat"
   status = 200
 
+[context.production.environment]
+  GH_REPO = "heliang0817-eng/genflow"
+  GH_FILE = "data/shared-history.json"
+
 [[headers]]
   for = "/*"
   [headers.values]
