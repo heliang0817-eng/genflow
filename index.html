@@ -537,7 +537,10 @@ const HISTORY_KEY = 'genflow_history';
 const HISTORY_TTL = 48 * 60 * 60 * 1000; // 48 小时
 
 // ── 共享历史：远端存储（GitHub via Netlify Function）──
-const STORAGE_URL = `${DEFAULT_PROXY}/api/proxy/storage/history`;
+// STORAGE_URL 在 DEFAULT_PROXY 定义后再初始化（见下方 getStorageUrl）
+function getStorageUrl() {
+  return `${DEFAULT_PROXY}/api/proxy/storage/history`;
+}
 
 // 内存缓存，避免频繁请求
 let _remoteCache = null;
@@ -548,7 +551,7 @@ async function loadHistoryRemote() {
   const now = Date.now();
   if (_remoteCache && now - _remoteCacheTime < REMOTE_CACHE_TTL) return _remoteCache;
   try {
-    const res = await fetch(STORAGE_URL);
+    const res = await fetch(getStorageUrl());
     const j = await res.json();
     const all = j.records || [];
     _remoteCache = all.filter(r => (now - r.createdAt) < HISTORY_TTL);
@@ -569,7 +572,7 @@ async function saveHistoryRemote(records) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
   // 异步写远端
   try {
-    await fetch(STORAGE_URL, {
+    await fetch(getStorageUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ records: records.slice(0, 50) }),
