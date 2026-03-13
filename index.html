@@ -2385,22 +2385,40 @@ function updateStats() {
 function downloadImg(id) {
   const item = items.find(x => x.id === id);
   if (!item?.url) { toast('图片未生成', 'error'); return; }
-  triggerDownload(item.url, `${item.id}.jpg`);
-  toast(`下载: ${item.id}`, 'success');
+  toast(`⬇ 开始下载: ${item.id}`, 'info');
+  fetchBlobDownload(item.url, `${item.id}.jpg`)
+    .then(() => toast(`✅ 下载完成: ${item.id}`, 'success'))
+    .catch(() => { const a = document.createElement('a'); a.href = item.url; a.target='_blank'; a.click(); });
 }
 
 function downloadAll() {
   const done = items.filter(x => x.status === 'done' && x.url);
   if (!done.length) { toast('没有已完成的图片', 'error'); return; }
-  done.forEach((item, i) => setTimeout(() => triggerDownload(item.url, `${item.id}.jpg`), i * 300));
-  toast(`开始下载 ${done.length} 张图片`, 'success');
+  _batchDownloadImgs(done);
 }
 
 function downloadSelected() {
   const sel = items.filter(x => x.selected && x.url);
   if (!sel.length) { toast('没有选中图片', 'error'); return; }
-  sel.forEach((item, i) => setTimeout(() => triggerDownload(item.url, `${item.id}.jpg`), i * 300));
-  toast(`下载 ${sel.length} 张图片`, 'success');
+  _batchDownloadImgs(sel);
+}
+
+async function _batchDownloadImgs(list) {
+  toast(`⬇ 开始下载 ${list.length} 张图片，请稍候...`, 'info');
+  let ok = 0, fail = 0;
+  for (const item of list) {
+    try {
+      await fetchBlobDownload(item.url, `${item.id}.jpg`);
+      ok++;
+      toast(`✅ ${ok}/${list.length} 完成: ${item.id}`, 'success');
+    } catch(err) {
+      fail++;
+      console.warn(`[下载] ${item.id} 失败`, err);
+      const a = document.createElement('a'); a.href = item.url; a.target='_blank'; a.click();
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  toast(`🎉 图片下载完成：${ok} 成功${fail ? ` / ${fail} 失败` : ''}`, 'success');
 }
 
 // 通过代理 fetch → Blob URL 下载，解决跨域限制 + 提速
