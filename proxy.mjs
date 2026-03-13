@@ -106,6 +106,27 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 动态 OSS 代理：/proxy/oss-dynamic/<hostname>/path → https://<hostname>/path
+  // 支持任意 aliyuncs.com 子域，解决 wan2.6 等模型返回不同 OSS 域的图片
+  if (req.url.startsWith('/proxy/oss-dynamic/')) {
+    const rest = req.url.slice('/proxy/oss-dynamic/'.length); // hostname/path
+    const slashIdx = rest.indexOf('/');
+    const hostname = slashIdx === -1 ? rest : rest.slice(0, slashIdx);
+    const pathPart = slashIdx === -1 ? '/' : rest.slice(slashIdx);
+
+    // 安全限制：只允许 aliyuncs.com 和 bytepluses.com 子域
+    if (!hostname.endsWith('.aliyuncs.com') && !hostname.endsWith('.bytepluses.com') && !hostname.endsWith('.byteimg.com')) {
+      res.writeHead(403, CORS_HEADERS);
+      res.end(JSON.stringify({ error: 'forbidden_host', hostname }));
+      return;
+    }
+
+    const dynRoute = { base: `https://${hostname}`, keyType: 'dashscope' };
+    const fakeReq = Object.assign(Object.create(req), { url: pathPart });
+    proxyRequest(fakeReq, res, dynRoute, '');
+    return;
+  }
+
   const matchedPrefix = Object.keys(ROUTES).find(k => req.url.startsWith(k));
   if (matchedPrefix) {
     proxyRequest(req, res, ROUTES[matchedPrefix], matchedPrefix);

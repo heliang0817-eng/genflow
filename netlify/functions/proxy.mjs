@@ -111,6 +111,40 @@ export const handler = async (event, context) => {
     }
   }
 
+  // ── 动态 OSS 代理：oss-dynamic/<hostname>/path ──
+  if (service === 'oss-dynamic') {
+    const hostname = parts[1];
+    if (!hostname || (!hostname.endsWith('.aliyuncs.com') && !hostname.endsWith('.byteimg.com'))) {
+      return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'forbidden_host' }) };
+    }
+    const restPath = '/' + parts.slice(2).join('/');
+    const queryStr = event.rawQuery ? '?' + event.rawQuery : '';
+    const targetUrl = `https://${hostname}${restPath}${queryStr}`;
+    const result = await new Promise((resolve, reject) => {
+      const targetUrlObj = new URL(targetUrl);
+      const options = {
+        hostname,
+        port: 443,
+        path: targetUrlObj.pathname + (targetUrlObj.search || ''),
+        method: 'GET',
+        headers: { host: hostname },
+      };
+      const req = https.request(options, (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve({ statusCode: res.statusCode, contentType: res.headers['content-type'] || 'image/jpeg', body: Buffer.concat(chunks) }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+    return {
+      statusCode: result.statusCode,
+      headers: { ...CORS, 'Content-Type': result.contentType },
+      body: result.body.toString('base64'),
+      isBase64Encoded: true,
+    };
+  }
+
   // ── API 代理 ──
   const targetBase = ROUTES[service];
   if (!targetBase) {

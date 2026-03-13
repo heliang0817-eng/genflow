@@ -1956,9 +1956,12 @@ function proxyImgUrl(url) {
   if (!url) return url;
   try {
     const u = new URL(url);
-    // dashscope-a717.oss-accelerate.aliyuncs.com → /proxy/oss/...
-    if (u.hostname.endsWith('.aliyuncs.com')) {
-      return `${PROXY_BASE}${PROXY_PATH}/oss${u.pathname}${u.search}`;
+    if (u.hostname.endsWith('.aliyuncs.com') || u.hostname.endsWith('.byteimg.com')) {
+      // 动态 OSS 代理：支持任意 aliyuncs.com 子域（wan2.6 等模型返回的 OSS 域名各不相同）
+      const proxyPath = PROXY_BASE.includes('localhost')
+        ? `/proxy/oss-dynamic/${u.hostname}${u.pathname}${u.search}`
+        : `/api/proxy/oss-dynamic/${u.hostname}${u.pathname}${u.search}`;
+      return `${PROXY_BASE}${proxyPath}`;
     }
   } catch(e) {}
   return url;
