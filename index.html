@@ -2386,13 +2386,48 @@ function updateStats() {
 // ════════════════════════════════════════════════════════
 //  DOWNLOAD
 // ════════════════════════════════════════════════════════
+// 将图片 URL 转为 PNG Blob（Canvas 转换）
+async function imgUrlToPngBlob(url) {
+  const proxyUrl = proxyImgUrl(url);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error('Canvas toBlob 失败'));
+      }, 'image/png');
+    };
+    img.onerror = () => reject(new Error('图片加载失败'));
+    img.src = proxyUrl;
+  });
+}
+
+// 下载单张图片为 PNG
+async function downloadImgAsPng(url, filename) {
+  const blob = await imgUrlToPngBlob(url);
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
 function downloadImg(id) {
   const item = items.find(x => x.id === id);
   if (!item?.url) { toast('图片未生成', 'error'); return; }
-  toast(`⬇ 开始下载: ${item.id}`, 'info');
-  fetchBlobDownload(item.url, `${item.id}.jpg`)
-    .then(() => toast(`✅ 下载完成: ${item.id}`, 'success'))
-    .catch(() => { const a = document.createElement('a'); a.href = item.url; a.target='_blank'; a.click(); });
+  toast(`⬇ 开始下载: ${item.id}.png`, 'info');
+  downloadImgAsPng(item.url, `${item.id}.png`)
+    .then(() => toast(`✅ 下载完成: ${item.id}.png`, 'success'))
+    .catch(err => {
+      console.warn('[下载] PNG 转换失败，降级直链', err);
+      const a = document.createElement('a'); a.href = item.url; a.target = '_blank'; a.click();
+    });
 }
 
 function downloadAll() {
@@ -2408,19 +2443,19 @@ function downloadSelected() {
 }
 
 async function _batchDownloadImgs(list) {
-  toast(`⬇ 开始下载 ${list.length} 张图片，请稍候...`, 'info');
+  toast(`⬇ 开始下载 ${list.length} 张 PNG，请稍候...`, 'info');
   let ok = 0, fail = 0;
   for (const item of list) {
     try {
-      await fetchBlobDownload(item.url, `${item.id}.jpg`);
+      await downloadImgAsPng(item.url, `${item.id}.png`);
       ok++;
-      toast(`✅ ${ok}/${list.length} 完成: ${item.id}`, 'success');
+      toast(`✅ ${ok}/${list.length} 完成: ${item.id}.png`, 'success');
     } catch(err) {
       fail++;
       console.warn(`[下载] ${item.id} 失败`, err);
-      const a = document.createElement('a'); a.href = item.url; a.target='_blank'; a.click();
+      const a = document.createElement('a'); a.href = item.url; a.target = '_blank'; a.click();
     }
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300));
   }
   toast(`🎉 图片下载完成：${ok} 成功${fail ? ` / ${fail} 失败` : ''}`, 'success');
 }
