@@ -414,11 +414,29 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <div class="section-head">
         <h2>🎬 视频生成</h2>
         <div class="section-badge" id="vid-badge">0 个任务</div>
-        <div style="margin-left:auto;display:flex;gap:8px">
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <!-- 时长选择 -->
+          <label style="font-size:12px;color:var(--text2);white-space:nowrap">⏱ 时长</label>
+          <select class="config-select" id="vid-duration" style="width:80px;font-size:12px;padding:4px 6px" onchange="applyVidDurationToAll()">
+            <option value="4" selected>4 秒</option>
+            <option value="5">5 秒</option>
+            <option value="6">6 秒</option>
+            <option value="8">8 秒</option>
+            <option value="10">10 秒</option>
+          </select>
+          <!-- 首尾帧模式 -->
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap">
+            <input type="checkbox" id="vid-loop-mode" style="width:14px;height:14px;accent-color:var(--accent)" onchange="onLoopModeChange()">
+            🔁 首尾帧模式
+          </label>
           <button class="btn btn-ghost" onclick="startVideoGen()">▶ 开始全部生成</button>
           <button class="btn btn-ghost" onclick="downloadAllVids()">⬇ 全部下载</button>
           <button class="btn btn-secondary" onclick="switchTab('images')">← 返回图片</button>
         </div>
+      </div>
+      <!-- 首尾帧提示 -->
+      <div id="loop-mode-tip" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(6,214,160,.08);border:1px solid rgba(6,214,160,.25);border-radius:8px;font-size:12px;color:var(--accent3)">
+        🔁 <b>首尾帧模式已开启</b>：视频的第一帧和最后一帧将使用同一张源图片，生成无缝循环效果。
       </div>
       <div class="empty-state" id="empty-vid" style="display:none">
         <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
@@ -1354,16 +1372,30 @@ async function submitVideoTask(vitem) {
   if (modelId === 'mock') return null;
 
   // Seedance I2V 新格式: content 数组（multimodal）
-  const dur = vitem.duration || 5;
+  const dur = vitem.duration || 4;
+  const loopMode = isLoopMode();
   const promptText = (vitem.prompt || '') + ` --duration ${dur} --camerafixed false`;
 
-  const body = {
-    model: modelId,
-    content: [
-      { type: 'text', text: promptText },
-      { type: 'image_url', image_url: { url: vitem.srcUrl } }
-    ]
-  };
+  let body;
+  if (loopMode) {
+    // 首尾帧模式：first_frame_image + last_frame_image 均使用同一张源图
+    body = {
+      model: modelId,
+      content: [
+        { type: 'text', text: promptText },
+        { type: 'image_url', image_url: { url: vitem.srcUrl } },          // 首帧
+        { type: 'image_url', image_url: { url: vitem.srcUrl } },          // 尾帧
+      ]
+    };
+  } else {
+    body = {
+      model: modelId,
+      content: [
+        { type: 'text', text: promptText },
+        { type: 'image_url', image_url: { url: vitem.srcUrl } }
+      ]
+    };
+  }
 
   console.log('[GenFlow] submitVideoTask', modelId, vitem.srcUrl.slice(0, 60));
 
@@ -1591,11 +1623,33 @@ async function regenItem(id) {
 // ════════════════════════════════════════════════════════
 //  VIDEO GENERATION
 // ════════════════════════════════════════════════════════
+function getVidDuration() {
+  const el = document.getElementById('vid-duration');
+  return el ? parseInt(el.value) || 4 : 4;
+}
+
+function applyVidDurationToAll() {
+  const dur = getVidDuration();
+  vidItems.forEach(v => { if (v.status !== 'done') v.duration = dur; });
+  renderVideoGrid();
+}
+
+function onLoopModeChange() {
+  const on = document.getElementById('vid-loop-mode').checked;
+  document.getElementById('loop-mode-tip').style.display = on ? '' : 'none';
+}
+
+function isLoopMode() {
+  const el = document.getElementById('vid-loop-mode');
+  return el ? el.checked : false;
+}
+
 function goVideoGen() {
   const selected = items.filter(x => x.selected && x.status === 'done');
   if (!selected.length) { toast('请先勾选已完成的图片', 'error'); return; }
 
   const existing = new Map(vidItems.map(v => [v.id, v]));
+  const dur = getVidDuration();
 
   // 展开 video_prompts：每个 asset 的每条 video_prompt 生成一个视频任务
   const newVidItems = [];
@@ -1614,7 +1668,7 @@ function goVideoGen() {
           vidType: vp.type || '',             // loop_breathing / loop_action 等
           width: item.width > item.height ? 1280 : 720,
           height: item.width > item.height ? 720 : 1280,
-          duration: item.duration || 5,
+          duration: dur,
           status: 'idle',
           videoUrl: null,
           videoHistory: [],
@@ -1634,7 +1688,7 @@ function goVideoGen() {
         vidType: '',
         width: item.width > item.height ? 1280 : 720,
         height: item.width > item.height ? 720 : 1280,
-        duration: item.duration || 5,
+        duration: dur,
         status: 'idle',
         videoUrl: null,
         videoHistory: [],
@@ -2115,9 +2169,15 @@ function buildVideoHTML(v) {
       <div class="src-row">
         <img class="src-thumb" src="${v.srcUrl}" alt="">
         <div style="flex:1;min-width:0">
-          <div>${esc(v.srcId)} · ${v.width}×${v.height} · ${v.duration}s</div>
+          <div>${esc(v.srcId)} · ${v.width}×${v.height}</div>
           ${v.vidType ? `<span class="meta-tag tag-type" style="font-size:10px">${esc(v.vidType)}</span>` : ''}
         </div>
+        <!-- 单卡时长调整 -->
+        <label style="font-size:11px;color:var(--text3);white-space:nowrap">⏱</label>
+        <select style="font-size:11px;padding:2px 4px;border-radius:5px;background:var(--bg3);border:1px solid var(--border);color:var(--text);cursor:pointer"
+          onchange="(function(el){const vi=vidItems.find(x=>x.id==='${esc(v.id)}');if(vi){vi.duration=parseInt(el.value);renderVideoCard('${esc(v.id)}');}})(this)">
+          ${[4,5,6,8,10].map(s=>`<option value="${s}"${v.duration===s?' selected':''}>${s}秒</option>`).join('')}
+        </select>
       </div>
       <textarea class="prompt-textarea" id="vprompt-${esc(v.id)}"></textarea>
       <div class="card-actions">${actions}</div>
