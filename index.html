@@ -709,7 +709,7 @@ function renderHistoryPanel() {
     const expireIn = Math.max(0, Math.round((HISTORY_TTL - (Date.now() - r.createdAt)) / 3600000));
     const doneItems = r.items.filter(it => it.status === 'done' && it.url);
     const thumbs = doneItems.slice(0, 4).map(it =>
-      `<img class="history-thumb" src="${esc(proxyImgUrl(it.url))}" onerror="this.style.opacity='.3'">`
+      `<img class="history-thumb" src="${esc(proxyImgUrl(it.url || it.displayUrl))}" onerror="this.style.opacity='.3'">`
     ).join('');
     const more = doneItems.length > 4 ? `<div class="history-thumb-more">+${doneItems.length - 4}</div>` : '';
 
@@ -1122,7 +1122,7 @@ function closeModal() {
 function openPreview(id) {
   const item = items.find(x => x.id === id);
   if (!item || !item.url) return;
-  document.getElementById('modal-img').src = item.displayUrl || item.url;
+  document.getElementById('modal-img').src = proxyImgUrl(item.url);
   document.getElementById('modal-title').textContent = `预览 · ${item.id}  (${item.width}×${item.height})`;
   document.getElementById('modal-prompt').textContent = item.prompt;
   document.getElementById('preview-modal').classList.add('show');
@@ -1979,7 +1979,8 @@ function buildCardHTML(item) {
 
   let preview = '';
   if (item.url) {
-    const dispUrl = item.displayUrl || item.url;
+    // 始终用原始 url 实时转代理，避免历史记录存的 displayUrl 是旧环境的 localhost
+    const dispUrl = proxyImgUrl(item.url);
     preview = `<img src="${esc(dispUrl)}" alt="${esc(item.id)}" onclick="openPreview('${esc(item.id)}')">`;
   } else {
     preview = `<div class="img-placeholder">
