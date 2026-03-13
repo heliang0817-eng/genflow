@@ -1385,13 +1385,13 @@ async function submitVideoTask(vitem) {
 
   let body;
   if (loopMode) {
-    // 首尾帧模式：通过 role 字段区分首帧/尾帧，均使用同一张源图
+    // 首尾帧模式：role 字段在 content item 顶层，不在 image_url 内部
     body = {
       model: modelId,
       content: [
         { type: 'text', text: promptText },
-        { type: 'image_url', image_url: { url: vitem.srcUrl, role: 'first_frame' } },
-        { type: 'image_url', image_url: { url: vitem.srcUrl, role: 'last_frame'  } },
+        { type: 'image_url', image_url: { url: vitem.srcUrl }, role: 'first_frame' },
+        { type: 'image_url', image_url: { url: vitem.srcUrl }, role: 'last_frame'  },
       ]
     };
   } else {
