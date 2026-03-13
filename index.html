@@ -728,13 +728,18 @@ function renderHistoryPanel() {
       <div class="hpanel-detail" id="hpdetail-${esc(r.id)}" style="display:none">${itemGenHistoryHtml}</div>
       ` : ''}
       ${(() => {
-        const vids = (r.vidItems || []).filter(v => v.videoHistory && v.videoHistory.length > 0);
+        const vids = (r.vidItems || []).filter(v => v.videoUrl || (v.videoHistory && v.videoHistory.length > 0));
         if (!vids.length) return '';
-        const vidHtml = vids.map(v => `
+        const vidHtml = vids.map(v => {
+          // 当前版本视频（videoUrl）+ 历史版本（videoHistory）
+          const allClips = [];
+          if (v.videoUrl) allClips.push({ videoUrl: v.videoUrl, time: '最新' });
+          (v.videoHistory || []).forEach(h => allClips.push(h));
+          return `
           <div class="hpanel-img-row">
-            <div class="hpanel-img-label">🎬 ${esc(v.srcId || v.id)}</div>
+            <div class="hpanel-img-label">🎬 ${esc(v.srcId || v.id)}${v.duration ? ` · ${v.duration}s` : ''}</div>
             <div class="hpanel-gh-list">
-              ${v.videoHistory.map(h => `
+              ${allClips.map(h => `
                 <div class="hpanel-gh-item">
                   <video class="hpanel-gh-thumb" src="${esc(h.videoUrl)}" muted playsinline
                     onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"
@@ -742,9 +747,11 @@ function renderHistoryPanel() {
                   <div class="hpanel-gh-time">${esc(h.time)}</div>
                 </div>`).join('')}
             </div>
-          </div>`).join('');
+          </div>`;
+        }).join('');
+        const doneCount = vids.filter(v => v.videoUrl).length;
         return `
-          <div class="hpanel-expand-btn" onclick="toggleHPanelDetail('vid-${esc(r.id)}',this)">▶ 查看视频生成历史</div>
+          <div class="hpanel-expand-btn" onclick="toggleHPanelDetail('vid-${esc(r.id)}',this)">▶ 视频记录（${doneCount}条）</div>
           <div class="hpanel-detail" id="hpdetail-vid-${esc(r.id)}" style="display:none">${vidHtml}</div>`;
       })()}
     </div>`;
@@ -1717,10 +1724,57 @@ async function startVideoGen() {
     while (queue.length > 0 && active < conc) {
       const v = queue.shift();
       active++;
-      runVideo(v).finally(() => { active--; tick(); });
+      runVideo(v).finally(() => {
+        active--;
+        tick();
+        // 所有视频任务完成时，更新历史记录中的 vidItems
+        if (active === 0 && queue.length === 0) {
+          updateHistoryVidItems();
+        }
+      });
     }
   };
   tick();
+}
+
+// 视频生成完成后，将 vidItems 同步到最新一条历史记录
+function updateHistoryVidItems() {
+  const records = loadHistory();
+  if (!records.length) {
+    // 没有历史记录时新建一条仅含视频的记录
+    const date = new Date();
+    const doneVids = vidItems.filter(v => v.status === 'done');
+    const record = {
+      id: `batch_vid_${Date.now()}`,
+      createdAt: Date.now(),
+      name: `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')} · 视频 ${doneVids.length}条`,
+      total: 0, done: 0, failed: 0, model: '',
+      items: [],
+      vidItems: vidItems.map(v => ({
+        id: v.id, srcId: v.srcId, srcUrl: v.srcUrl,
+        prompt: v.prompt, videoUrl: v.videoUrl || null,
+        status: v.status, videoHistory: v.videoHistory || [],
+        duration: v.duration || 4,
+      })),
+    };
+    records.unshift(record);
+  } else {
+    // 更新最近一条记录的 vidItems
+    records[0].vidItems = vidItems.map(v => ({
+      id: v.id, srcId: v.srcId, srcUrl: v.srcUrl,
+      prompt: v.prompt, videoUrl: v.videoUrl || null,
+      status: v.status, videoHistory: v.videoHistory || [],
+      duration: v.duration || 4,
+    }));
+    // 同步更新名称里的视频数
+    const doneVids = vidItems.filter(v => v.status === 'done');
+    if (doneVids.length > 0 && !records[0].name.includes('视频')) {
+      records[0].name += ` · 视频${doneVids.length}条`;
+    }
+  }
+  saveHistory(records.slice(0, 50));
+  renderHistoryPanel();
+  toast(`📹 视频记录已保存（${vidItems.filter(v=>v.status==='done').length}条完成）`, 'success');
 }
 
 async function runVideo(v) {
