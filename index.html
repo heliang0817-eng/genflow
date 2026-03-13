@@ -426,7 +426,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
           </select>
           <!-- 首尾帧模式 -->
           <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap">
-            <input type="checkbox" id="vid-loop-mode" style="width:14px;height:14px;accent-color:var(--accent)" onchange="onLoopModeChange()">
+            <input type="checkbox" id="vid-loop-mode" checked style="width:14px;height:14px;accent-color:var(--accent)" onchange="onLoopModeChange()">
             🔁 首尾帧模式
           </label>
           <button class="btn btn-ghost" onclick="startVideoGen()">▶ 开始全部生成</button>
@@ -435,7 +435,7 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
         </div>
       </div>
       <!-- 首尾帧提示 -->
-      <div id="loop-mode-tip" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(6,214,160,.08);border:1px solid rgba(6,214,160,.25);border-radius:8px;font-size:12px;color:var(--accent3)">
+      <div id="loop-mode-tip" style="margin-bottom:12px;padding:8px 12px;background:rgba(6,214,160,.08);border:1px solid rgba(6,214,160,.25);border-radius:8px;font-size:12px;color:var(--accent3)">
         🔁 <b>首尾帧模式已开启</b>：视频的第一帧和最后一帧将使用同一张源图片，生成无缝循环效果。
       </div>
       <div class="empty-state" id="empty-vid" style="display:none">
@@ -470,6 +470,26 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       <div class="modal-close" onclick="closeHDetail()">✕</div>
     </div>
     <div class="modal-body" id="hdetail-body"></div>
+  </div>
+</div>
+
+<!-- 删除历史确认弹窗 -->
+<div class="modal-overlay" id="delete-confirm-modal" onclick="if(event.target===this)closeDeleteConfirm()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">🗑 删除历史记录</div>
+      <div class="modal-close" onclick="closeDeleteConfirm()">✕</div>
+    </div>
+    <div class="modal-body" style="gap:16px">
+      <div style="font-size:13px;color:var(--text2);line-height:1.7" id="delete-confirm-text">确认删除这条记录？</div>
+      <div style="padding:10px 12px;background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.2);border-radius:8px;font-size:12px;color:#ff6b6b">
+        ⚠️ 删除后对应的图片和视频记录将一并清除，无法恢复。
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeDeleteConfirm()">取消</button>
+        <button class="btn btn-danger" id="delete-confirm-btn" onclick="confirmDeleteHistory()">确认删除</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -708,21 +728,31 @@ function renderHistoryPanel() {
       </div>`;
     }).join('');
 
+    // 视频缩略图（已完成的视频，展示在主卡片）
+    const doneVids = (r.vidItems || []).filter(v => v.videoUrl);
+    const vidThumbs = doneVids.slice(0, 4).map(v =>
+      `<video class="history-thumb" src="${esc(v.videoUrl)}" muted playsinline
+        onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"
+        style="object-fit:cover;cursor:pointer" title="${esc(v.srcId||v.id)}"></video>`
+    ).join('');
+    const vidMore = doneVids.length > 4 ? `<div class="history-thumb-more">+${doneVids.length-4}🎬</div>` : '';
+
     return `<div class="history-item" id="hitem-${esc(r.id)}">
       <div class="history-item-header" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">
         <span class="history-item-title" id="hname-${esc(r.id)}">${esc(r.name || r.id)}</span>
         <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
           <button class="btn btn-ghost" style="padding:2px 7px;font-size:11px" onclick="startRenameHistory('${esc(r.id)}')">✏</button>
+          <button class="btn btn-danger" style="padding:2px 7px;font-size:11px" onclick="askDeleteHistory('${esc(r.id)}','${esc(r.name||r.id)}')">🗑</button>
           <span class="history-item-time">${expireIn}h后过期</span>
         </div>
       </div>
       <div class="history-item-stats" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">
-        <span class="history-stat ok">✓ ${r.done} 成功</span>
+        ${r.done > 0 ? `<span class="history-stat ok">✓ ${r.done} 图片</span>` : ''}
         ${r.failed > 0 ? `<span class="history-stat" style="color:var(--red)">✗ ${r.failed} 失败</span>` : ''}
-        <span class="history-stat">${r.total} 张</span>
-        <span class="history-stat">${esc(r.model.replace('wan2.6-t2i','Wan2.6').replace('wanx2.1-t2i-turbo','Wanx2.1'))}</span>
+        ${doneVids.length > 0 ? `<span class="history-stat ok">🎬 ${doneVids.length} 视频</span>` : ''}
+        ${r.model ? `<span class="history-stat">${esc(r.model.replace('wan2.6-t2i','Wan2.6').replace('wanx2.1-t2i-turbo','Wanx2.1'))}</span>` : ''}
       </div>
-      <div class="history-item-thumbs" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">${thumbs}${more}</div>
+      ${(thumbs || vidThumbs) ? `<div class="history-item-thumbs" onclick="loadHistoryToGrid('${esc(r.id)}')" style="cursor:pointer">${thumbs}${more}${vidThumbs}${vidMore}</div>` : ''}
       ${itemGenHistoryHtml ? `
       <div class="hpanel-expand-btn" onclick="toggleHPanelDetail('${esc(r.id)}',this)">▶ 查看各图生成历史</div>
       <div class="hpanel-detail" id="hpdetail-${esc(r.id)}" style="display:none">${itemGenHistoryHtml}</div>
@@ -813,6 +843,36 @@ function toggleHPanelDetail(recordId, btn) {
 }
 
 // 重命名历史记录
+// ── 删除历史记录 ──
+let _deleteTargetId = null;
+
+function askDeleteHistory(recordId, recordName) {
+  _deleteTargetId = recordId;
+  document.getElementById('delete-confirm-text').textContent =
+    `确认删除「${recordName}」？`;
+  document.getElementById('delete-confirm-modal').classList.add('show');
+}
+
+function closeDeleteConfirm() {
+  _deleteTargetId = null;
+  document.getElementById('delete-confirm-modal').classList.remove('show');
+}
+
+function confirmDeleteHistory() {
+  if (!_deleteTargetId) return;
+  const records = loadHistory();
+  const idx = records.findIndex(x => x.id === _deleteTargetId);
+  if (idx !== -1) records.splice(idx, 1);
+  saveHistory(records);
+  closeDeleteConfirm();
+  renderHistoryPanel();
+  // 如果删除的是当前激活的记录，清空 activeRecordId
+  if (typeof activeRecordId !== 'undefined' && activeRecordId === _deleteTargetId) {
+    activeRecordId = null;
+  }
+  toast('🗑 记录已删除', 'info');
+}
+
 function startRenameHistory(recordId) {
   const records = loadHistory();
   const r = records.find(x => x.id === recordId);
@@ -2343,18 +2403,83 @@ function downloadSelected() {
   toast(`下载 ${sel.length} 张图片`, 'success');
 }
 
+// 通过代理 fetch → Blob URL 下载，解决跨域限制 + 提速
+async function fetchBlobDownload(url, filename, onProgress) {
+  let fetchUrl = url;
+  // OSS 加速域名走代理，其余 URL 也走代理以绕过 CORS
+  if (url.includes('oss-accelerate') || url.includes('dashscope-a717')) {
+    const path = url.replace(/^https?:\/\/[^/]+/, '');
+    fetchUrl = `${PROXY_BASE}${PROXY_PATH}/oss${path}`;
+  } else if (url.startsWith('http') && !url.includes('localhost')) {
+    // 非 OSS 视频 URL（如 CDN）也尝试走代理
+    fetchUrl = url; // 直接 fetch，Blob 化即可绕过 download 跨域限制
+  }
+  const resp = await fetch(fetchUrl);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  // 读取进度
+  const contentLength = resp.headers.get('content-length');
+  const total = contentLength ? parseInt(contentLength) : 0;
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (onProgress && total) onProgress(Math.round(received / total * 100));
+  }
+
+  const blob = new Blob(chunks, { type: 'video/mp4' });
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
 function downloadVid(id) {
   const v = vidItems.find(x => x.id === id);
   if (!v?.videoUrl) { toast('视频未生成', 'error'); return; }
-  triggerDownload(v.videoUrl, `${v.id}.mp4`);
-  toast(`下载: ${v.id}`, 'success');
+  toast(`⬇ 开始下载: ${v.id}`, 'info');
+  fetchBlobDownload(v.videoUrl, `${v.id}.mp4`, pct => {
+    if (pct % 20 === 0) console.log(`[下载] ${v.id} ${pct}%`);
+  }).then(() => {
+    toast(`✅ 下载完成: ${v.id}`, 'success');
+  }).catch(err => {
+    // 代理失败时降级直接用 <a> 打开
+    console.warn('[下载] 代理失败，降级直链', err);
+    const a = document.createElement('a');
+    a.href = v.videoUrl; a.target = '_blank'; a.click();
+    toast(`⚠️ 代理失败，已在新标签打开`, 'info');
+  });
 }
 
 function downloadAllVids() {
   const done = vidItems.filter(x => x.status === 'done' && x.videoUrl);
   if (!done.length) { toast('没有已完成的视频', 'error'); return; }
-  done.forEach((v, i) => setTimeout(() => triggerDownload(v.videoUrl, `${v.id}.mp4`), i * 400));
-  toast(`开始下载 ${done.length} 个视频`, 'success');
+  toast(`⬇ 开始下载 ${done.length} 个视频，请稍候...`, 'info');
+
+  // 串行下载，避免并发抢带宽
+  (async () => {
+    let ok = 0, fail = 0;
+    for (const v of done) {
+      try {
+        await fetchBlobDownload(v.videoUrl, `${v.id}.mp4`);
+        ok++;
+        toast(`✅ ${ok}/${done.length} 完成: ${v.id}`, 'success');
+      } catch(err) {
+        fail++;
+        console.warn(`[下载] ${v.id} 失败`, err);
+        // 降级：直接新标签打开
+        const a = document.createElement('a');
+        a.href = v.videoUrl; a.target = '_blank'; a.click();
+      }
+      // 每个之间稍微间隔，避免触发 Blob URL 限制
+      await new Promise(r => setTimeout(r, 300));
+    }
+    toast(`🎉 全部下载完成：${ok} 成功${fail ? ` / ${fail} 失败` : ''}`, 'success');
+  })();
 }
 
 function triggerDownload(url, filename) {
