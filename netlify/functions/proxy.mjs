@@ -48,10 +48,11 @@ const GH_API   = `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}`;
 
 // ── GitHub 文件读写 ──
 async function ghGet() {
-  if (!GH_TOKEN) throw new Error('GH_TOKEN 环境变量未配置');
-  const res = await fetch(GH_API, {
-    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
-  });
+  // GET 公开仓库不需要 Token
+  const headers = { Accept: 'application/vnd.github.v3+json' };
+  if (GH_TOKEN) headers.Authorization = `token ${GH_TOKEN}`;
+  const res = await fetch(GH_API, { headers });
+  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
   const j = await res.json();
   const content = Buffer.from(j.content, 'base64').toString('utf8');
   return { data: JSON.parse(content), sha: j.sha };
