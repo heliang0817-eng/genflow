@@ -26,8 +26,9 @@ const KEYS = {
 };
 
 // 启动时打印（脱敏），确认 Key 已加载
-console.log(`[GenFlow Proxy v3] DashScope Key: ${KEYS.dashscope.slice(0,8)}****`);
-console.log(`[GenFlow Proxy v3] ARK Key:       ${KEYS.ark.slice(0,8)}****`);
+// Keys 已加载（不打印任何 Key 信息）
+console.log(`[GenFlow Proxy v3] DashScope Key: ${KEYS.dashscope ? '已配置 ✓' : '⚠ 未配置（检查 .env）'}`);
+console.log(`[GenFlow Proxy v3] ARK Key:       ${KEYS.ark ? '已配置 ✓' : '⚠ 未配置（检查 .env）'}`);
 
 const ROUTES = {
   '/proxy/dashscope': { base: 'https://dashscope.aliyuncs.com',                        keyType: 'dashscope' },
@@ -35,14 +36,31 @@ const ROUTES = {
   '/proxy/oss':       { base: 'https://dashscope-a717.oss-accelerate.aliyuncs.com',    keyType: 'dashscope' },
 };
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type, X-DashScope-Async, Accept',
-  'Access-Control-Max-Age': '86400',
-};
+// 允许的来源白名单
+const ALLOWED_ORIGINS = new Set([
+  'https://genflow2.netlify.app',
+  'http://localhost:8766',
+  'http://localhost:8765',
+  'http://localhost:8767',
+  'http://127.0.0.1:8766',
+  'http://127.0.0.1:8765',
+  // 本地 file:// 打开时 origin 为 null
+]);
 
-function proxyRequest(req, res, route, prefix) {
+function getCorsHeaders(origin) {
+  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : (origin ? null : '*');
+  return {
+    'Access-Control-Allow-Origin': allowed || 'https://genflow2.netlify.app',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
+    'Access-Control-Allow-Headers': 'Content-Type, X-DashScope-Async, Accept',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+}
+
+const CORS_HEADERS = getCorsHeaders('*'); // 初始化占位，实际每请求动态生成
+
+function proxyRequest(req, res, route, prefix, cors) {
   const restPath = req.url.slice(prefix.length);
   const target = new URL(restPath || '/', route.base);
 
@@ -68,9 +86,8 @@ function proxyRequest(req, res, route, prefix) {
   console.log(`[${new Date().toISOString()}] ${req.method} ${target.hostname}${options.path}`);
 
   const proxyReq = https.request(options, (proxyRes) => {
-    console.log(`  → ${proxyRes.statusCode}`);
     res.writeHead(proxyRes.statusCode, {
-      ...CORS_HEADERS,
+      ...cors,
       'Content-Type': proxyRes.headers['content-type'] || 'application/json',
     });
     proxyRes.pipe(res);
@@ -79,7 +96,7 @@ function proxyRequest(req, res, route, prefix) {
   proxyReq.on('error', (err) => {
     console.error('Proxy error:', err.message);
     if (!res.headersSent) {
-      res.writeHead(502, CORS_HEADERS);
+      res.writeHead(502, cors);
       res.end(JSON.stringify({ error: 'proxy_error', message: err.message }));
     }
   });
@@ -93,15 +110,18 @@ function proxyRequest(req, res, route, prefix) {
 }
 
 const server = http.createServer((req, res) => {
+  const origin = req.headers['origin'] || '';
+  const cors = getCorsHeaders(origin);
+
   if (req.method === 'OPTIONS') {
-    res.writeHead(200, CORS_HEADERS);
+    res.writeHead(200, cors);
     res.end();
     return;
   }
 
   // 健康检查端点
   if (req.url === '/' || req.url === '/health') {
-    res.writeHead(200, { ...CORS_HEADERS, 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', version: 'v3-secure' }));
     return;
   }
@@ -116,24 +136,24 @@ const server = http.createServer((req, res) => {
 
     // 安全限制：只允许 aliyuncs.com 和 bytepluses.com 子域
     if (!hostname.endsWith('.aliyuncs.com') && !hostname.endsWith('.bytepluses.com') && !hostname.endsWith('.byteimg.com')) {
-      res.writeHead(403, CORS_HEADERS);
+      res.writeHead(403, cors);
       res.end(JSON.stringify({ error: 'forbidden_host', hostname }));
       return;
     }
 
     const dynRoute = { base: `https://${hostname}`, keyType: 'dashscope' };
     const fakeReq = Object.assign(Object.create(req), { url: pathPart });
-    proxyRequest(fakeReq, res, dynRoute, '');
+    proxyRequest(fakeReq, res, dynRoute, '', cors);
     return;
   }
 
   const matchedPrefix = Object.keys(ROUTES).find(k => req.url.startsWith(k));
   if (matchedPrefix) {
-    proxyRequest(req, res, ROUTES[matchedPrefix], matchedPrefix);
+    proxyRequest(req, res, ROUTES[matchedPrefix], matchedPrefix, cors);
     return;
   }
 
-  res.writeHead(404, CORS_HEADERS);
+  res.writeHead(404, cors);
   res.end(JSON.stringify({ error: 'not_found', path: req.url }));
 });
 

@@ -6,6 +6,10 @@
  *   /api/proxy/oss/...       → dashscope-a717.oss-accelerate.aliyuncs.com
  *   GET  /api/proxy/storage/history  → 读取共享历史
  *   POST /api/proxy/storage/history  → 写入共享历史
+ *
+ * 安全说明：
+ *   所有 API Keys 必须通过 Netlify 环境变量注入（DASHSCOPE_KEY, ARK_KEY, GH_TOKEN）
+ *   不在代码中硬编码任何密钥
  */
 import https from 'https';
 
@@ -15,25 +19,36 @@ const ROUTES = {
   'oss':       'https://dashscope-a717.oss-accelerate.aliyuncs.com',
 };
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type, X-DashScope-Async, Accept',
-  'Access-Control-Max-Age': '86400',
-};
+// 允许的来源白名单
+const ALLOWED_ORIGINS = new Set([
+  'https://genflow2.netlify.app',
+  'http://localhost:8766',
+  'http://localhost:8765',
+  'http://localhost:8767',
+  'http://127.0.0.1:8766',
+  'http://127.0.0.1:8765',
+]);
 
-// token 分段存储避免被 secret scanner 误报
-const _t = [
-  Buffer.from('Z2hwX3FZUVE2c1BXb21tYTJqQzlGWG9JSAo=','base64').toString().trim(),
-  Buffer.from('YXRTSGZuRnpIM3Z3cjlQCg==','base64').toString().trim(),
-].join('');
-const GH_TOKEN = process.env.GH_TOKEN || _t;
+function getCorsHeaders(origin) {
+  const allowedOrigin = ALLOWED_ORIGINS.has(origin) ? origin : 'https://genflow2.netlify.app';
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
+    'Access-Control-Allow-Headers': 'Content-Type, X-DashScope-Async, Accept',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+}
+
+// API Keys 仅从环境变量读取，不包含任何硬编码 fallback
+const GH_TOKEN = process.env.GH_TOKEN || '';
 const GH_REPO  = process.env.GH_REPO || 'heliang0817-eng/genflow';
 const GH_FILE  = 'data/shared-history.json';
 const GH_API   = `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}`;
 
 // ── GitHub 文件读写 ──
 async function ghGet() {
+  if (!GH_TOKEN) throw new Error('GH_TOKEN 环境变量未配置');
   const res = await fetch(GH_API, {
     headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
   });
@@ -43,6 +58,7 @@ async function ghGet() {
 }
 
 async function ghPut(data, sha) {
+  if (!GH_TOKEN) throw new Error('GH_TOKEN 环境变量未配置');
   const content = Buffer.from(JSON.stringify(data)).toString('base64');
   const res = await fetch(GH_API, {
     method: 'PUT',
@@ -57,6 +73,9 @@ async function ghPut(data, sha) {
 }
 
 export const handler = async (event, context) => {
+  const origin = (event.headers && event.headers.origin) || '';
+  const CORS = getCorsHeaders(origin);
+
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS, body: '' };
   }
@@ -74,7 +93,7 @@ export const handler = async (event, context) => {
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v4' }),
+      body: JSON.stringify({ status: 'ok', version: 'netlify-fn-v5-secure' }),
     };
   }
 
@@ -160,12 +179,25 @@ export const handler = async (event, context) => {
   const targetUrl = targetBase + restPath + queryStr;
   const targetHostname = new URL(targetBase).hostname;
 
-  const _a1 = Buffer.from('OTg3M2I2YjktZmZiZS00OTgxLTg=','base64').toString().trim();
-  const _a2 = Buffer.from('MjRkLWEwMzlhYjc1MWI2Yg==','base64').toString().trim();
-  const _d1 = Buffer.from('c2stZGZkNTc2MmQyOGFjNDZi','base64').toString().trim();
-  const _d2 = Buffer.from('NmFkMjU0ZTAwNmIxY2RmNGU=','base64').toString().trim();
-  const DASHSCOPE_KEY = process.env.DASHSCOPE_KEY || (_d1 + _d2);
-  const ARK_KEY       = process.env.ARK_KEY       || (_a1 + _a2);
+  // API Keys 仅从环境变量读取
+  const DASHSCOPE_KEY = process.env.DASHSCOPE_KEY || '';
+  const ARK_KEY       = process.env.ARK_KEY       || '';
+
+  if (!DASHSCOPE_KEY && service !== 'ark') {
+    return {
+      statusCode: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'DASHSCOPE_KEY 环境变量未配置' }),
+    };
+  }
+  if (!ARK_KEY && service === 'ark') {
+    return {
+      statusCode: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'ARK_KEY 环境变量未配置' }),
+    };
+  }
+
   const apiKey = service === 'ark' ? ARK_KEY : DASHSCOPE_KEY;
 
   // 从头构建干净的请求头，避免大小写冲突
@@ -178,8 +210,6 @@ export const handler = async (event, context) => {
   }
   reqHeaders['host'] = targetHostname;
   reqHeaders['authorization'] = `Bearer ${apiKey}`;
-
-  console.log(`[GenFlow] ${event.httpMethod} ${targetUrl}`);
 
   const result = await new Promise((resolve, reject) => {
     const targetUrlObj = new URL(targetUrl);
