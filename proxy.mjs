@@ -109,6 +109,64 @@ function proxyRequest(req, res, route, prefix, cors) {
   req.pipe(proxyReq);
 }
 
+// ── 共享历史存储处理函数 ──
+const GH_TOKEN = process.env.GH_TOKEN || '';
+const GH_REPO  = process.env.GH_REPO  || 'heliang0817-eng/genflow';
+const GH_API   = `https://api.github.com/repos/${GH_REPO}/contents/data/shared-history.json`;
+
+async function ghGet() {
+  const headers = { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'GenFlow-Proxy' };
+  if (GH_TOKEN) headers.Authorization = `token ${GH_TOKEN}`;
+  const r = await fetch(GH_API, { headers });
+  if (!r.ok) throw new Error(`GitHub API ${r.status}`);
+  const j = await r.json();
+  const content = Buffer.from(j.content.replace(/\n/g,''), 'base64').toString('utf8');
+  return { data: JSON.parse(content), sha: j.sha };
+}
+
+async function ghPut(data, sha) {
+  if (!GH_TOKEN) throw new Error('GH_TOKEN 未配置');
+  const content = Buffer.from(JSON.stringify(data)).toString('base64');
+  const r = await fetch(GH_API, {
+    method: 'PUT',
+    headers: { Authorization: `token ${GH_TOKEN}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json', 'User-Agent': 'GenFlow-Proxy' },
+    body: JSON.stringify({ message: 'update: shared history', content, sha }),
+  });
+  return r.ok;
+}
+
+function handleStorageHistory(req, res, cors) {
+  if (req.method === 'GET') {
+    ghGet().then(({ data }) => {
+      res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    }).catch(e => {
+      res.writeHead(500, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    });
+  } else if (req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      let newData;
+      try { newData = JSON.parse(body); } catch(e) {
+        res.writeHead(400, { ...cors, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid_json' }));
+        return;
+      }
+      ghGet().then(({ sha }) => ghPut(newData, sha)).then(() => {
+        res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      }).catch(e => {
+        res.writeHead(500, { ...cors, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      });
+    });
+  } else {
+    res.writeHead(405, cors); res.end();
+  }
+}
+
 const server = http.createServer((req, res) => {
   const origin = req.headers['origin'] || '';
   const cors = getCorsHeaders(origin);
@@ -144,6 +202,54 @@ const server = http.createServer((req, res) => {
     const dynRoute = { base: `https://${hostname}`, keyType: 'dashscope' };
     const fakeReq = Object.assign(Object.create(req), { url: pathPart });
     proxyRequest(fakeReq, res, dynRoute, '', cors);
+    return;
+  }
+
+  // 服务端图片转 base64：/proxy/img2base64?url=<encoded_url>
+  // 用于视频生成时把过期/跨域图片转为 base64 传给火山引擎
+  if (req.url.startsWith('/proxy/img2base64')) {
+    const urlObj = new URL(req.url, 'http://localhost');
+    const imgUrl = urlObj.searchParams.get('url');
+    if (!imgUrl) {
+      res.writeHead(400, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'missing url param' }));
+      return;
+    }
+    const targetUrl = new URL(imgUrl);
+    const options = {
+      hostname: targetUrl.hostname,
+      port: 443,
+      path: targetUrl.pathname + (targetUrl.search || ''),
+      method: 'GET',
+      headers: { 'User-Agent': 'GenFlow-Proxy/1.0' },
+    };
+    const chunks = [];
+    const proxyReq = https.request(options, (proxyRes) => {
+      if (proxyRes.statusCode !== 200) {
+        res.writeHead(proxyRes.statusCode, { ...cors, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `upstream ${proxyRes.statusCode}` }));
+        return;
+      }
+      proxyRes.on('data', c => chunks.push(c));
+      proxyRes.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        const mime = proxyRes.headers['content-type'] || 'image/png';
+        const b64 = `data:${mime};base64,${buf.toString('base64')}`;
+        res.writeHead(200, { ...cors, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ dataUrl: b64 }));
+      });
+    });
+    proxyReq.on('error', (e) => {
+      res.writeHead(500, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    });
+    proxyReq.end();
+    return;
+  }
+
+  // 共享历史存储：/proxy/storage/history → GitHub API
+  if (req.url === '/proxy/storage/history') {
+    handleStorageHistory(req, res, cors);
     return;
   }
 

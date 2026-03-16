@@ -1,11 +1,12 @@
 /**
- * GenFlow Proxy — Cloudflare Pages Function
+ * GenFlow Proxy — Cloudflare Pages Function v2
  * 路由:
- *   /api/proxy/dashscope/... → dashscope.aliyuncs.com
- *   /api/proxy/ark/...       → ark.ap-southeast.bytepluses.com
- *   /api/proxy/oss/...       → dashscope-a717.oss-accelerate.aliyuncs.com
- *   GET  /api/proxy/storage/history  → 读取共享历史
- *   POST /api/proxy/storage/history  → 写入共享历史
+ *   /api/proxy/dashscope/...          → dashscope.aliyuncs.com
+ *   /api/proxy/ark/...                → ark.ap-southeast.bytepluses.com
+ *   /api/proxy/oss-dynamic/<host>/... → 动态 OSS 代理
+ *   /api/proxy/img2base64?url=...     → 服务端图片转 base64
+ *   GET  /api/proxy/storage/history   → 读取共享历史
+ *   POST /api/proxy/storage/history   → 写入共享历史
  */
 
 const ROUTES = {
@@ -14,24 +15,10 @@ const ROUTES = {
   'oss':       'https://dashscope-a717.oss-accelerate.aliyuncs.com',
 };
 
-const ALLOWED_ORIGINS = new Set([
-  'https://genflow-cf.pages.dev',
-  'https://genflow2.netlify.app',
-  'http://localhost:8766',
-  'http://localhost:8765',
-  'http://localhost:8767',
-  'http://127.0.0.1:8766',
-  'http://127.0.0.1:8765',
-]);
-
 function getCorsHeaders(origin) {
-  // 允许所有 *.pages.dev 子域
-  let allowedOrigin = '*';
-  if (origin && (ALLOWED_ORIGINS.has(origin) || origin.endsWith('.pages.dev'))) {
-    allowedOrigin = origin;
-  }
+  // 允许所有 *.pages.dev、localhost 及自定义域名
   return {
-    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
     'Access-Control-Allow-Headers': 'Content-Type, X-DashScope-Async, Accept',
     'Access-Control-Max-Age': '86400',
@@ -40,7 +27,7 @@ function getCorsHeaders(origin) {
 }
 
 async function ghGet(ghApi, ghToken) {
-  const headers = { Accept: 'application/vnd.github.v3+json' };
+  const headers = { Accept: 'application/vnd.github.v3+json', 'User-Agent': 'GenFlow-CF' };
   if (ghToken) headers.Authorization = `token ${ghToken}`;
   const res = await fetch(ghApi, { headers });
   if (!res.ok) throw new Error(`GitHub API ${res.status}`);
@@ -58,6 +45,7 @@ async function ghPut(ghApi, ghToken, data, sha) {
       Authorization: `token ${ghToken}`,
       Accept: 'application/vnd.github.v3+json',
       'Content-Type': 'application/json',
+      'User-Agent': 'GenFlow-CF',
     },
     body: JSON.stringify({ message: 'update: shared history', content, sha }),
   });
@@ -76,7 +64,7 @@ export async function onRequest(context) {
   }
 
   // 解析路径：去掉 /api/proxy 前缀
-  let pathname = url.pathname.replace(/^\/api\/proxy\/?/, '');
+  const pathname = url.pathname.replace(/^\/api\/proxy\/?/, '');
   const parts = pathname.split('/').filter(Boolean);
   const service = parts[0];
 
@@ -85,18 +73,41 @@ export async function onRequest(context) {
   const ARK_KEY       = env.ARK_KEY       || '';
   const GH_TOKEN      = env.GH_TOKEN      || '';
   const GH_REPO       = env.GH_REPO       || 'heliang0817-eng/genflow';
-  const GH_FILE       = 'data/shared-history.json';
-  const GH_API        = `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}`;
+  const GH_API        = `https://api.github.com/repos/${GH_REPO}/contents/data/shared-history.json`;
 
   // 健康检查
   if (!service || service === 'health') {
-    return new Response(JSON.stringify({ status: 'ok', version: 'cf-pages-v1' }), {
+    return new Response(JSON.stringify({ status: 'ok', version: 'cf-pages-v2' }), {
       status: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
-  // 共享历史存储
+  // ── 服务端图片转 base64：/api/proxy/img2base64?url=<encoded> ──
+  if (service === 'img2base64') {
+    const imgUrl = url.searchParams.get('url');
+    if (!imgUrl) {
+      return new Response(JSON.stringify({ error: 'missing url param' }), {
+        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+    try {
+      const imgRes = await fetch(imgUrl, { headers: { 'User-Agent': 'GenFlow-CF/1.0' } });
+      if (!imgRes.ok) throw new Error(`upstream ${imgRes.status}`);
+      const buf = await imgRes.arrayBuffer();
+      const mime = imgRes.headers.get('content-type') || 'image/png';
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      return new Response(JSON.stringify({ dataUrl: `data:${mime};base64,${b64}` }), {
+        status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    } catch(e) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  // ── 共享历史存储 ──
   if (service === 'storage' && parts[1] === 'history') {
     try {
       if (request.method === 'GET') {
@@ -123,48 +134,40 @@ export async function onRequest(context) {
     }
   }
 
-  // 动态 OSS 代理
+  // ── 动态 OSS 代理 ──
   if (service === 'oss-dynamic') {
     const hostname = parts[1];
     if (!hostname || (!hostname.endsWith('.aliyuncs.com') && !hostname.endsWith('.byteimg.com'))) {
       return new Response(JSON.stringify({ error: 'forbidden_host' }), {
-        status: 403,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
     const restPath = '/' + parts.slice(2).join('/');
-    const queryStr = url.search || '';
-    const targetUrl = `https://${hostname}${restPath}${queryStr}`;
-    const proxyRes = await fetch(targetUrl, { method: 'GET' });
+    const targetUrl = `https://${hostname}${restPath}${url.search}`;
+    const proxyRes = await fetch(targetUrl);
     const body = await proxyRes.arrayBuffer();
     return new Response(body, {
       status: proxyRes.status,
-      headers: {
-        ...CORS,
-        'Content-Type': proxyRes.headers.get('content-type') || 'image/jpeg',
-      },
+      headers: { ...CORS, 'Content-Type': proxyRes.headers.get('content-type') || 'image/jpeg' },
     });
   }
 
-  // API 代理
+  // ── API 代理 ──
   const targetBase = ROUTES[service];
   if (!targetBase) {
     return new Response(JSON.stringify({ error: 'unknown_service', service }), {
-      status: 404,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
   if (!DASHSCOPE_KEY && service !== 'ark') {
     return new Response(JSON.stringify({ error: 'DASHSCOPE_KEY 未配置' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
   if (!ARK_KEY && service === 'ark') {
     return new Response(JSON.stringify({ error: 'ARK_KEY 未配置' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
@@ -172,7 +175,6 @@ export async function onRequest(context) {
   const restPath = '/' + parts.slice(1).join('/');
   const targetUrl = targetBase + restPath + url.search;
 
-  // 构建转发请求头
   const skipHeaders = new Set([
     'host', 'origin', 'referer', 'accept-encoding',
     'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto',
@@ -187,19 +189,11 @@ export async function onRequest(context) {
   newHeaders.set('authorization', `Bearer ${apiKey}`);
 
   const body = ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer();
-
-  const proxyRes = await fetch(targetUrl, {
-    method: request.method,
-    headers: newHeaders,
-    body,
-  });
+  const proxyRes = await fetch(targetUrl, { method: request.method, headers: newHeaders, body });
 
   const resBody = await proxyRes.arrayBuffer();
   const resHeaders = new Headers(CORS);
   resHeaders.set('Content-Type', proxyRes.headers.get('content-type') || 'application/json');
 
-  return new Response(resBody, {
-    status: proxyRes.status,
-    headers: resHeaders,
-  });
+  return new Response(resBody, { status: proxyRes.status, headers: resHeaders });
 }
