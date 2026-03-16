@@ -2231,7 +2231,7 @@ const HISTORY_TTL = 7 * 24 * 60 * 60 * 1000; // 7 天
 // ── 共享历史：远端存储（GitHub via Netlify Function）──
 // 始终指向 Netlify 公网地址（历史存储不走本地代理，避免本地环境 GH_TOKEN 问题）
 function getStorageUrl() {
-  return `https://genflow2.netlify.app/api/proxy/storage/history`;
+  return `https://genflow-cf.pages.dev/api/proxy/storage/history`;
 }
 
 // 内存缓存，避免频繁请求
@@ -3142,7 +3142,7 @@ function parseSize(raw) {
 // 代理服务: node proxy.mjs (端口 8767)
 // 支持自定义代理地址（公网部署时通过 URL 参数 ?proxy=https://xxx 指定）
 // 默认代理地址：Netlify 部署（固定不变，国内可访问）
-const DEFAULT_PROXY = 'https://genflow2.netlify.app';
+const DEFAULT_PROXY = 'https://genflow-cf.pages.dev';
 
 function getProxyBase() {
   const urlParam = new URLSearchParams(window.location.search).get('proxy');
